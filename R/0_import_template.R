@@ -3,7 +3,6 @@
 
 # cmar data explorer: https://cmar-cmp-time-series.share.connect.posit.cloud
 
-
 library(cmpr)           # get data from the CMAR database
 library(sensorstrings)  # plot data
 
@@ -87,6 +86,8 @@ dat <- cmpr_get_station_data(
 ) 
 
 # export data -------------------------------------------------------------
+
+# NOTE: data will NOT be uploaded to GitHub
 
 # save data to analyse later (e.g., calculate daily averages and export)
 saveRDS(dat, here("data/file_name.RDS"))

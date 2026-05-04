@@ -4,6 +4,7 @@
 # cmar data explorer: https://cmar-cmp-time-series.share.connect.posit.cloud
 
 library(cmpr)           # get data from the CMAR database
+library(qaqcmar)        # plot qc flags
 library(sensorstrings)  # plot data
 
 library(data.table)     # export csv file
@@ -20,15 +21,7 @@ conn <- cmpr_connect_to_db(connection_config = "admin")
 
 # Look at all stations and their location data
 station_metadata <- cmpr_get_station_metadata(conn) %>%
-  filter(station_classification == "coastal") %>%
-  select(
-    station = station_name,
-    waterbody = waterbody_name,
-    county = county_name,
-    latitude = station_latitude,
-    longitude = station_longitude,
-    classification = station_classification
-  )
+  filter(classification == "coastal") 
 
 ss_leaflet_station_map(station_metadata)
 
@@ -38,27 +31,16 @@ ss_leaflet_station_map(station_metadata)
 # Look at all the deployments at a station
 station_depls <- cmpr_get_station_depl(conn, station_name = "Spry Harbour")
 
-# Get all the data from a given station - this could take 5 - 6 minutes for
+# Get all the data from a given station - this could take a few minutes for
 # the stations with a lot of data
 cmpr_station_dat <- cmpr_get_station_data(
   conn,
   station_name = "Spry Harbour",
   variable_type = "temperature"
-) 
+)
 
-station_dat <- cmpr_station_dat %>%
-  select(
-    station = station_name,
-    depl_date,
-    retrieval_date,
-    sensor_serial_num,
-    sensor_depth_at_low_tide_m = sensor_depth_m,
-    variable = variable_name,
-    timestamp_utc,
-    value = variable_value
-  ) %>% 
-  ss_convert_depth_to_ordered_factor() %>% 
-  ss_pivot_wider()
+station_dat <- cmpr_station_dat %>% 
+  ss_convert_depth_to_ordered_factor()
 
 # plot
 ss_ggplot_variables(station_dat)
@@ -73,6 +55,13 @@ station_dat_filt <- station_dat %>%
 p <- ss_ggplot_variables(station_dat_filt)
 
 ggplotly(p)
+
+# review quality control flags
+station_dat %>% 
+  mutate(sensor_type = "") %>% 
+  filter(sensor_depth_at_low_tide_m == 3) %>% 
+  select(-variable_type) %>% 
+  qc_plot_flags(qc_tests = "qc")
 
 
 # multiple stations -------------------------------------------------------

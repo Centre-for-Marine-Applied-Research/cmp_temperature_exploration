@@ -8,6 +8,7 @@
 # you only need to run this script once. If any of the packages are updated,
 # just re-run the code to install that package for the most recent version
 
+install.packages("devtools")
 library(devtools) # to install packages from GitHub
 
 

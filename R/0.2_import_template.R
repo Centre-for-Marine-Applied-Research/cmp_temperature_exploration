@@ -58,7 +58,6 @@ ggplotly(p)
 
 # review quality control flags
 station_dat %>% 
-  mutate(sensor_type = "") %>% 
   filter(sensor_depth_at_low_tide_m == 3) %>% 
   select(-variable_type) %>% 
   qc_plot_flags(qc_tests = "qc")

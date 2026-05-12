@@ -7,3 +7,5 @@ config.yml
 
 /data
 .positai
+*.html
+*.pdf

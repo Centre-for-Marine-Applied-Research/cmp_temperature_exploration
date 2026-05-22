@@ -32,9 +32,69 @@ depl_dates <- paste0(
 ) %>% 
   list.files(pattern = station) %>% 
   substr(nchar(station) + 2, nchar(station) + 11) 
+
+trim_dates <- depl_dates[1:length(depl_dates) - 1] %>% 
+  map(\(x) paste0(
+    ss_import_path(station, x), "/compile_", station, "_", x, ".R")
+    ) %>% 
+  unlist() %>% 
+  map(\(x) ss_extract_trimdates(x)) 
+
+dat <- depl_dates[1:length(depl_dates) - 1] %>% 
+  map(\(x) ss_import_path(station, x)) %>% 
+  unlist() %>% 
+  map2(trim_dates, \(x, y)
+       ss_compile_deployment_data(x) %>% 
+         filter(timestamp_utc >= y$start_date, 
+                timestamp_utc <= y$end_date)
+  ) %>% 
+  list_rbind()
+
+
+dat %>% 
+  select(-contains("dissolved_oxygen"), 
+         -contains("salinity"),
+         -contains("depth_measured")
+  ) %>% 
+  ss_ggplot_variables()
+
+
+# mi ght be a better way to do this with map2
+path %>% 
+  map(\(x)
+      ss_compile_deployment_data(x) %>% 
+        filter(
+          timestamp_utc > trim_dates[names(x)][[1]]$start_date)
+  ) %>% 
+  list_rbind()
+
+
+
+
+dat <- depl_dates[1] %>% 
+  # depl_dates[1:length(depl_dates) - 1] %>% 
+  map(\(x) ss_import_path(station, x))# %>% 
+  unlist() %>% 
+  map(\(x) \(y)
+      ss_compile_deployment_data(x) %>% 
+        filter(
+          timestamp_utc > trim_dates[x][[1]]$start_date)
+  ) %>% 
+  list_rbind()
+
+
+
+path <- paste0(
+  "R:/data_branches/water_quality/station_folders/", station
+) %>% 
+  list.files(pattern = station) %>% 
+  substr(nchar(station) + 2, nchar(station) + 11) %>% 
+  map(\(x) ss_import_path(station, x)) %>% 
+  unlist() 
   
-trimdates <- depl_dates[1:length(depl_dates) - 1] %>% 
-  map(\(x) ss_import_path(station, x)) %>% l
+
+trim_dates <- path[1:length(path) - 1] %>% 
+  map(\(x) ss_extract_trimdates(x))
 
 
 

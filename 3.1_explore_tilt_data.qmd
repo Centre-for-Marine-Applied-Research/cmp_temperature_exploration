@@ -1,0 +1,148 @@
+---
+title: "Explore Tilt Data"
+date: "`r Sys.Date()`"
+format: 
+  html:
+    toc: true
+    toc-depth: 3
+    embed-resources: true
+echo: false
+editor_options: 
+  chunk_output_type: console
+---
+
+
+```{r}
+#| include: false
+
+library(DT)
+library(dplyr)
+library(here)
+library(htmltools)
+library(lubridate)
+library(plotly)
+library(purrr)
+library(sensorstrings)
+library(viridis)
+
+source(here("functions/subchunkify.R"))
+
+
+theme_set(theme_light())
+round_interval <- "12 hours"
+
+depth_cols <- viridis(8, direction = -1)
+
+# ensures the Plotly JS dependencies are loaded being called in the loop
+htmltools::tagList(plot_ly(x = rnorm(10), type = "histogram"))
+
+dt_options <- list(
+  dom = 'ft',
+  paging = FALSE,
+  searching = TRUE,
+  scrollY = "500px",
+  scrollyX = "500px",
+  columnDefs = list(list(className = 'dt-center', targets = "_all"))
+)
+
+dat_raw <- list.files(here("data-raw"), pattern = ".rds", full.names = TRUE) %>% 
+  map(readRDS) %>% 
+  list_rbind()
+
+# averaged
+dat <- dat_raw %>%
+  select(-contains("dissolved_oxygen"), -contains("salinity"),
+         -contains("depth_measured")) %>%
+  ss_pivot_longer() %>%
+  mutate(round_timestamp = round_date(timestamp_utc, unit = round_interval)) %>%
+  summarise(
+    mean_value = round(mean(value), digits = 3),
+    .by = c(station, variable, sensor_depth_at_low_tide_m, round_timestamp)
+  ) %>%
+  rename(timestamp_utc = round_timestamp, value = mean_value) %>%
+  filter(timestamp_utc >= as_datetime("2020-01-01"))
+
+```
+
+# Summary Table
+
+```{r}
+
+dat_raw %>% 
+  filter(!is.na(tilt_degree)) %>% 
+  summarise(
+    min_tilt = round(min(tilt_degree, na.rm = TRUE), digits = 3),
+    max_tilt = round(max(tilt_degree), digits = 3),
+    mean_tilt = round(mean(tilt_degree), digits = 3),
+    med_tilt = round(median(tilt_degree), digits = 3),
+    .by = c(station, sensor_depth_at_low_tide_m)
+  ) %>% 
+  datatable(options = dt_options, rownames = FALSE)
+
+```
+
+# Tilt Distribution
+
+- Raw (not averaged) observations
+- Binwidth: 5 degrees
+
+```{r}
+#| output: asis
+#| warning: false
+
+stations <- sort(unique(dat_raw$station))
+bin_width <- 5
+
+for(i in seq_along(stations)) {
+  
+  station_i <- stations[i]
+  
+  cat('\n###', station_i, '\n')
+  
+  dat_i <- dat_raw %>% 
+    filter(station == station_i) %>% 
+    ss_convert_depth_to_ordered_factor() %>% 
+    filter(!is.na(tilt_degree)) 
+  
+  p <- ggplot(dat_i,
+              aes(tilt_degree, group = sensor_depth_at_low_tide_m, 
+                  fill = sensor_depth_at_low_tide_m)) +
+    geom_histogram(binwidth = bin_width, show.legend = TRUE) +
+    scale_x_continuous(limits = c(-5, 190)) +
+    scale_fill_manual("Depth (m)", values = depth_cols, drop = FALSE)
+  
+  print(htmltools::tagList(ggplotly(p, height = 250)))
+}
+
+```
+
+# Time Series
+
+- Temperature and tilt averaged over `r round_interval`
+
+```{r}
+#| results: asis
+#| warning: false
+
+for(i in seq_along(stations)) {
+  
+  station_i <- stations[i]
+  
+  cat('\n###', station_i, '\n')
+  
+  dat_i <- dat %>% 
+    filter(station == station_i) %>% 
+    ss_convert_depth_to_ordered_factor() %>% 
+    filter(!is.na(value)) 
+  
+  p <- ss_ggplot_variables(dat_i)
+  
+#  subchunkify(p, fig_height = 4, fig_width = 8.5)
+  print(htmltools::tagList(ggplotly(p, height = 500)))
+}
+
+
+```
+
+
+

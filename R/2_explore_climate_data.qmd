@@ -1,0 +1,206 @@
+---
+format: 
+  html:
+    toc: true
+    toc-depth: 3
+    embed-resources: true
+echo: false
+dpi: 600
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+#| include: false
+
+library(data.table)
+library(dplyr)
+library(DT)
+library(ggplot2)
+library(here)
+library(htmltools)
+library(leaflet)
+library(lubridate)
+library(plotly)
+library(RColorBrewer)
+library(stringr)
+library(tidyr)
+
+source(here("functions/subchunkify.R"))
+
+theme_set(theme_light())
+
+dat <- fread(here("data/climate_data_2_hours.csv"), data.table = FALSE) %>% 
+  pivot_longer(
+    cols = air_temperature:precipitation_mm, 
+    values_to = "value", names_to = "variable"
+  ) %>% 
+  filter(!is.na(value))
+
+met_locations <- fread(
+  here("data/climate_station_locations.csv"), data.table = FALSE
+) 
+ 
+get_pal <- colorRampPalette(brewer.pal(8, "Set2"))
+pal <- get_pal(length(unique(dat$variable)))
+
+```
+
+# Environment Canada Meteorology Network
+
+`r Sys.Date()`
+
+- Preliminary exploratory analysis.
+- Data from: [Government of Canada](https://collaboration.cmc.ec.gc.ca/cmc/climate/Get_More_Data_Plus_de_donnees/)
+
+## Station Locations
+
+```{r}
+#| fig-height: 5
+
+leaflet() %>%
+  addProviderTiles(providers$CartoDB.Positron) %>%
+  addCircleMarkers(
+    data = met_locations,
+    lng = ~longitude,
+    lat = ~latitude, label = ~station,
+    weight = 1, fillOpacity = 0.75, radius = 5
+  ) %>%
+  addScaleBar(
+    position = "bottomleft",
+    options = scaleBarOptions(imperial = FALSE)
+  )
+```
+
+## Summary 
+
+```{r}
+#| message: false
+
+dat_summary <- dat %>% 
+  summarise(
+    start_timestamp = as_date(min(timestamp_utc)),
+    end_timestamp = as_date(max(timestamp_utc)),
+    duration_weeks = difftime(end_timestamp, start_timestamp, units = "weeks"),
+    duration_weeks = as.numeric(duration_weeks),
+    duration_years = round(duration_weeks / 52, digits = 2),
+    n = n(),
+    .by = c(station, variable)
+  ) %>% 
+  ungroup() %>% 
+  arrange(station)
+
+int <- dat %>% 
+  group_by(station, variable) %>% 
+  arrange(timestamp_utc, .by_group = TRUE) %>% 
+  #slice(1:10) %>% 
+  mutate(int = difftime(lead(timestamp_utc), timestamp_utc, unit = "hours")) %>% 
+  ungroup() %>% 
+  group_by(station, variable, int) %>% 
+  mutate(n = n()) %>% 
+  distinct(station, variable, int, n)
+
+
+dat_summary %>% 
+  select(-duration_weeks) %>% 
+  datatable(
+    rownames = FALSE, 
+    options = list(
+      dom = 'ft',
+      paging = FALSE,
+      searching = TRUE,
+      pageLength = 500,
+      scrollY = "500px",
+      scrollX = "500px",
+      columnDefs = list(list(className = 'dt-center', targets = "_all"))
+    ))
+```
+
+## Number of Observations
+
+::: panel-tabset
+
+```{r}
+#| results: asis
+
+stations <- sort(unique(dat$station))
+
+plot_ly()
+
+for(i in seq_along(stations)) {
+  
+  station_i <- stations[i]
+  
+  cat('\n###', station_i, '\n')
+  
+  dat_i <- dat_summary %>% 
+    filter(station == station_i)
+  
+  p <- ggplot(dat_i, aes(n, variable, fill = variable)) + 
+    geom_col(col = 1) +
+    scale_y_discrete("", limits = rev) +
+    scale_x_continuous("number of obervations") +
+    scale_fill_manual(values = pal) +
+    geom_vline(xintercept = 0) +
+    theme(legend.position = "none")
+  
+ # subchunkify(p, fig_height = 4, fig_width = 8.5)
+    print(htmltools::tagList(ggplotly(p)))
+}
+  
+```
+
+:::
+
+
+## Time Series
+
+::: panel-tabset
+
+```{r}
+#| results: asis
+#| fig-height: 12
+
+stations <- sort(unique(dat$station))
+
+plot_ly()
+
+for(i in seq_along(stations)) {
+  
+  station_i <- stations[i]
+  
+  cat('\n###', station_i, '\n')
+  
+  dat_i <- dat %>% 
+    filter(station == station_i)
+  
+  p2 <- ggplot(dat_i, aes(timestamp_utc, value, col = variable)) +
+    geom_line(linewidth = 0.75) +
+    scale_color_manual(values = pal) +
+    facet_wrap(~variable, scales = "free_y", ncol = 1) +
+    theme(legend.position = "none", strip.text = element_text(size = 12))
+
+  # girafe(
+  #   ggobj = p2,
+  #   options = list(
+  #     opts_zoom(max = 10),
+  #     opts_selection(only_shiny = FALSE),
+  #     opts_toolbar(position = "top")
+  #   )
+  # )
+  
+  # subchunkify(p, fig_height = 10, fig_width = 8.5)
+    print(htmltools::tagList(ggplotly(p2, height = 800)))
+}
+  
+```
+
+:::
+
+
+
+
+
+
+
+

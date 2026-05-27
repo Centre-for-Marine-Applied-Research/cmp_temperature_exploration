@@ -25,8 +25,7 @@ library(purrr)
 library(sensorstrings)
 library(viridis)
 
-source(here("functions/subchunkify.R"))
-
+#source(here("functions/subchunkify.R"))
 
 theme_set(theme_light())
 round_interval <- "12 hours"
@@ -41,7 +40,7 @@ dt_options <- list(
   paging = FALSE,
   searching = TRUE,
   scrollY = "500px",
-  scrollyX = "500px",
+  scrollX = "500px",
   columnDefs = list(list(className = 'dt-center', targets = "_all"))
 )
 
@@ -87,7 +86,7 @@ dat_raw %>%
 - Binwidth: 5 degrees
 
 ```{r}
-#| output: asis
+#| results: asis
 #| warning: false
 
 stations <- sort(unique(dat_raw$station))
@@ -104,9 +103,12 @@ for(i in seq_along(stations)) {
     ss_convert_depth_to_ordered_factor() %>% 
     filter(!is.na(tilt_degree)) 
   
-  p <- ggplot(dat_i,
-              aes(tilt_degree, group = sensor_depth_at_low_tide_m, 
-                  fill = sensor_depth_at_low_tide_m)) +
+  p <- ggplot(
+    dat_i,
+    aes(tilt_degree, 
+        group = sensor_depth_at_low_tide_m, 
+        fill = sensor_depth_at_low_tide_m
+    )) +
     geom_histogram(binwidth = bin_width, show.legend = TRUE) +
     scale_x_continuous(limits = c(-5, 190)) +
     scale_fill_manual("Depth (m)", values = depth_cols, drop = FALSE)
@@ -137,7 +139,6 @@ for(i in seq_along(stations)) {
   
   p <- ss_ggplot_variables(dat_i)
   
-#  subchunkify(p, fig_height = 4, fig_width = 8.5)
   print(htmltools::tagList(ggplotly(p, height = 500)))
 }
 

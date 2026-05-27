@@ -6,6 +6,9 @@
 config.yml
 
 /data
+/data-raw
+/figures
+/scratchpad
 .positai
 *.html
 *.pdf

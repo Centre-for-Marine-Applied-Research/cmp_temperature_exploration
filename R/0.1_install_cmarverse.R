@@ -12,6 +12,10 @@ install.packages("devtools")
 library(devtools) # to install packages from GitHub
 
 
+# adcp --------------------------------------------------------------------
+
+install_github("Centre-for-Marine-Applied-Research/adcp")
+
 # sensorstrings -----------------------------------------------------------
 
 install_github("Centre-for-Marine-Applied-Research/sensorstrings")

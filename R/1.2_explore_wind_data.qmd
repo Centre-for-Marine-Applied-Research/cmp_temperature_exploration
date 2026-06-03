@@ -1,6 +1,7 @@
 ---
 title: "Explore Wind Data"
 date: "`r Sys.Date()`"
+author: "Danielle Dempsey"
 format: 
   html:
     toc: true
@@ -17,17 +18,15 @@ editor_options:
 
 library(adcp)
 library(data.table)
-library(DT)
 library(dplyr)
 library(forcats)
 library(here)
-library(htmltools)
+#library(htmltools)
 library(leaflet)
 library(lubridate)
 library(plotly)
 library(purrr)
 library(RColorBrewer)
-library(sensorstrings)
 library(scales)
 library(tidyr)
 library(viridis)
@@ -41,27 +40,19 @@ foo <- function(path) {
   ) 
 }
 
+# from west to east
 stations <- c("YARMOUTH RCS", "LUNENBURG", "BEAVER ISLAND (AUT)", "HART ISLAND (AUT)" )
 
 # plot params
-pal <- brewer.pal(4, "Dark2")
+#pal <- brewer.pal(4, "Dark2")
+pal <- viridis(4, option = "F", begin = 0.2, end = 0.8)
 n_speed_bins <- 10
 n_dir_bins <- 8
 theme_set(theme_light())
 # ensures the Plotly JS dependencies are loaded being called in the loop
-htmltools::tagList(plot_ly(x = rnorm(10), type = "histogram"))
+#htmltools::tagList(plot_ly(x = rnorm(10), type = "histogram"))
 
-
-dt_options <- list(
-  dom = 'ft',
-  paging = FALSE,
-  searching = TRUE,
-  scrollY = "500px",
-  scrollX = "500px",
-  columnDefs = list(list(className = 'dt-center', targets = "_all"))
-)
-
-
+# read in data
 dat_folders <- list.dirs(here("data-raw/"), full.names = TRUE, recursive = FALSE)
 dat_folders <- dat_folders[-which(grepl("ast", dat_folders))]
 dat_folders <- dat_folders[-which(grepl("cygwin", dat_folders))]
@@ -104,9 +95,7 @@ dat <- map_df(.x = dat_folders, .f = foo) %>%
 - More information on the climate data [here](https://www.canada.ca/en/services/environment/weather.html).
 - Data was not averaged for this document.
 
-
 # Station Locations
-
 
 ```{r}
 #| fig-height: 5
@@ -139,7 +128,7 @@ p <- dat %>%
     names_to = "variable", values_to = "value"
   ) %>%
   ggplot(aes(timestamp_utc, value, col = fct_rev(station))) +
-  geom_line(linewidth = 0.1) +
+  geom_line(linewidth = 0.2) +
   scale_colour_manual("station", values = pal) +
   guides(color = guide_legend(override.aes = list(linewidth = 8))) +
   facet_wrap(~variable, scales = "free_y", ncol = 1) +
@@ -164,8 +153,6 @@ p <- dat %>%
   group_by(station) %>%
   mutate(n_station = n()) %>%
   ungroup() %>%
-  # adcp_label_direction(n_petals = n_dir_bins, column = wind_direction_degree) %>%
-  # adcp_label_speed(column = wind_speed_km_per_hour, n_ints = n_speed_bins) %>%
   summarise(
     n = n(),
     .by = c(wind_direction_degree_labels, wind_speed_km_per_hour_labels,
@@ -187,8 +174,6 @@ p <- dat %>%
 p
 
 ```
-
-
 
 # Wind Roses by Month
 
@@ -242,9 +227,7 @@ for(i in seq_along(stations)) {
 
 # Observations by Direction
 
-Proportion of total observations at that occur each month from each direction.
-
-::: panel-tabset
+Percent of observations from each direction for each month and station.
 
 ```{r}
 #| results: asis
@@ -252,25 +235,43 @@ Proportion of total observations at that occur each month from each direction.
 
 dat_dir <- dat %>% 
     mutate(month_utc = month(timestamp_utc, label = TRUE)) %>%
-    group_by(station) %>%
+    group_by(station, month_utc) %>%
     mutate(n_station = n()) %>%
     ungroup() %>%
     summarise(
       n = n(),
       .by = c(wind_direction_degree_labels, month_utc, station, n_station)
     ) %>%
-    mutate(n_prop = round(n / n_station, digits = 3)) 
+  mutate(
+    n_prop = round(n / n_station, digits = 3),
+    n_percent = 100 * n_prop
+  ) 
 
 
-ggplot(dat_dir, aes(month_utc, n_prop, col = station, group = station)) + 
+p <- ggplot(
+  dat_dir, 
+  aes(month_utc, 
+      n_prop, 
+      col = fct_rev(station), group = station,
+      text = paste0(
+        "month: ", month_utc, "\n",
+        "value: ", n_percent, "%\n",
+        "station: ", station, "\n"
+      ))) + 
   geom_line() + 
+  scale_y_continuous("Percent of Observations", labels = scales::percent
+  ) +
+  scale_color_manual("station", values = pal) +
   facet_wrap(~wind_direction_degree_labels, ncol = 2) +
   theme(
-     # text = element_text(size = 8),
-      legend.position = "bottom",
-      axis.title.x = element_blank(),
-      strip.background = element_rect(fill = "grey50")
-    )
+    legend.position = "bottom",
+    axis.title.x = element_blank(),
+    panel.grid.minor.y = element_blank(),
+    panel.spacing.y = unit(1, "lines"),
+    strip.background = element_rect(fill = "grey50")
+  )
+
+ggplotly(p, height = 500, tooltip = "text")
 
 #dirs <- levels(dat$wind_direction_degree_labels)
 # 
@@ -315,7 +316,6 @@ ggplot(dat_dir, aes(month_utc, n_prop, col = station, group = station)) +
 # }
 ```
 
-:::
 
 
 

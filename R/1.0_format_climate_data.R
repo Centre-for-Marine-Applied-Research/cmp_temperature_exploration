@@ -2,6 +2,8 @@
 
 # hourly meteorlogical data from https://climate.weather.gc.ca/index_e.html
 # downloaded using cygwin
+# technical details here: https://climate.weather.gc.ca/doc/Technical_Documentation.pdf
+
 
 # From website:
 # binned into 2-hour intervals
@@ -57,7 +59,7 @@ met_dat <- bind_rows(beav, hart, lune, yar) %>%
     dew_point_temperature =  `Dew Point Temp (°C)`,
     relative_humidity_percent = `Rel Hum (%)`,
     precipitation_mm = `Precip. Amount (mm)`,
-    wind_direction_degree = `Wind Dir (10s deg)`,
+    wind_direction_10_degree = `Wind Dir (10s deg)`,
     wind_speed_km_per_hour = `Wind Spd (km/h)`,
     # visibility_km = `Visibility (km)`,
     pressure_kpa = `Stn Press (kPa)`,

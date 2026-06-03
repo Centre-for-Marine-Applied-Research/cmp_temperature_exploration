@@ -23,6 +23,7 @@ library(lubridate)
 library(plotly)
 library(purrr)
 library(sensorstrings)
+library(tidyr)
 library(viridis)
 
 #source(here("functions/subchunkify.R"))
@@ -121,10 +122,17 @@ for(i in seq_along(stations)) {
 # Time Series
 
 - Temperature and tilt averaged over `r round_interval`
+- Thick grey lines indicate deployment dates
 
 ```{r}
 #| results: asis
 #| warning: false
+
+depl_dates <- dat_raw %>% 
+  distinct(station, deployment_range) %>% 
+  separate(deployment_range, into = c("depl_start", "depl_end"), sep = " to ") %>% 
+  mutate(depl_start = as_datetime(depl_start))
+  
 
 for(i in seq_along(stations)) {
   
@@ -132,14 +140,25 @@ for(i in seq_along(stations)) {
   
   cat('\n###', station_i, '\n')
   
+  depl_dates_i <- depl_dates %>% 
+    filter(station == station_i) %>% 
+    slice(-1)
+  
   dat_i <- dat %>% 
     filter(station == station_i) %>% 
     ss_convert_depth_to_ordered_factor() %>% 
     filter(!is.na(value)) 
   
-  p <- ss_ggplot_variables(dat_i)
-  
-  print(htmltools::tagList(ggplotly(p, height = 500)))
+  p <- ss_ggplot_variables(dat_i) +
+    geom_vline(
+      data = depl_dates_i, col = "grey50",
+      aes(
+        xintercept = depl_start,
+        text = paste("depl date: ", format(depl_start))
+      )
+    )
+      
+  print(htmltools::tagList(ggplotly(p, height = 500, tooltip = "text")))
 }
 
 

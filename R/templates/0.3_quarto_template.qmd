@@ -1,0 +1,115 @@
+---
+title: "Insert Title Here"
+author: "Your Name"
+date: "`r Sys.Date()`"
+format: 
+  html:
+    toc: true
+    toc-depth: 3
+    embed-resources: true
+echo: false
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+#| include: false
+
+library(DT)
+library(dplyr)
+library(ggplot2)
+library(plotly)
+
+dt_options <- list(
+  dom = 'ft',
+  paging = FALSE,
+  searching = TRUE,
+  scrollY = "500px",
+  scrollyX = "500px",
+  columnDefs = list(list(className = 'dt-center', targets = "_all"))
+)
+
+dat <- penguins
+
+```
+
+# Penguins Dataset
+
+Let's explore the [palmerpenguins](https://allisonhorst.github.io/palmerpenguins/index.html) dataset to learn about Quarto html files.
+
+This dataset has `r nrow(dat)` rows of data.
+
+## Full Dataset
+
+```{r}
+#| echo: true
+
+DT::datatable(dat, options = dt_options, rownames = FALSE)
+```
+
+
+## Static Figure
+
+```{r}
+#| fig-width: 8
+#| fig-height: 4
+
+ggplot(dat, aes(bill_dep, bill_len, col = species)) +
+  geom_point()
+
+```
+
+## Static Figure 2
+
+Remove the warning message by filtering out the NA values.
+
+```{r}
+#| fig-width: 8
+#| fig-height: 4
+
+dat_rm_na <- dat %>% 
+  filter(!is.na(bill_dep) & !is.na(bill_len))
+
+ggplot(dat_rm_na, aes(bill_dep, bill_len, col = species)) +
+  geom_point()
+
+```
+
+# Interactive Figure
+
+```{r}
+p <- ggplot(dat_rm_na, aes(body_mass, flipper_len, col = species)) +
+  geom_point()
+
+ggplotly(p)
+```
+
+# Tabs
+
+Calculate the number of penguins of each species at each island for each year.
+
+```{r}
+n_pen <- dat %>% 
+  count(year, island, species)
+```
+
+
+::: panel-tabset
+
+### Fig
+```{r}
+
+p <- ggplot(n_pen, aes(year, n, fill = species)) +
+  geom_col() +
+  facet_wrap(~island)
+
+ggplotly(p)
+```
+
+
+### Table
+
+```{r}
+datatable(n_pen, options = dt_options, rownames = FALSE)
+```
+:::

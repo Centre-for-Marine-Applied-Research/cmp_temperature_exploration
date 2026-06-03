@@ -133,24 +133,24 @@ leaflet() %>%
 ```{r}
 #| fig-height: 6
 
-# p <- dat %>% 
-#   pivot_longer(
-#     cols = c(wind_direction_degree, wind_speed_km_per_hour), 
-#     names_to = "variable", values_to = "value"
-#   ) %>% 
-#   ggplot(aes(timestamp_utc, value, col = fct_rev(station))) +
-#   geom_line(linewidth = 0.1) + 
-#   scale_colour_manual("station", values = pal) +
-#   guides(color = guide_legend(override.aes = list(linewidth = 8))) +
-#   facet_wrap(~variable, scales = "free_y", ncol = 1) + 
-#   theme(
-#     legend.position = "bottom",
-#     legend.title = element_blank(),
-#     panel.spacing.y = unit(5, "lines"),
-#     strip.background = element_rect(fill = "grey50")
-#   )
-# 
-# ggplotly(p) 
+p <- dat %>%
+  pivot_longer(
+    cols = c(wind_direction_degree, wind_speed_km_per_hour),
+    names_to = "variable", values_to = "value"
+  ) %>%
+  ggplot(aes(timestamp_utc, value, col = fct_rev(station))) +
+  geom_line(linewidth = 0.1) +
+  scale_colour_manual("station", values = pal) +
+  guides(color = guide_legend(override.aes = list(linewidth = 8))) +
+  facet_wrap(~variable, scales = "free_y", ncol = 1) +
+  theme(
+    legend.position = "bottom",
+    legend.title = element_blank(),
+    panel.spacing.y = unit(5, "lines"),
+    strip.background = element_rect(fill = "grey50")
+  )
+
+ggplotly(p)
 ```
 
 # Wind Roses
@@ -160,31 +160,31 @@ leaflet() %>%
 ```{r}
 #| fig-height: 6
 
-# p <- dat %>% 
-#   group_by(station) %>% 
-#   mutate(n_station = n()) %>% 
-#   ungroup() %>% 
-#   # adcp_label_direction(n_petals = n_dir_bins, column = wind_direction_degree) %>%
-#   # adcp_label_speed(column = wind_speed_km_per_hour, n_ints = n_speed_bins) %>% 
-#   summarise(
-#     n = n(),
-#     .by = c(wind_direction_degree_labels, wind_speed_km_per_hour_labels,
-#             station, n_station)
-#   ) %>%
-#   mutate(n_prop = n / n_station) %>% 
-#   adcp_plot_current_rose(
-#     speed_col = wind_speed_km_per_hour_labels,
-#     direction_col = wind_direction_degree_labels,
-#     speed_label = "Wind Speed (km/h)",
-#     calculate_prop = FALSE, ncol_legend = 5
-#   ) +
-#   facet_wrap(~station) +
-#   theme(
-#     legend.position = "bottom",
-#     strip.background = element_rect(fill = "grey50")
-#   )
-# 
-# p
+p <- dat %>%
+  group_by(station) %>%
+  mutate(n_station = n()) %>%
+  ungroup() %>%
+  # adcp_label_direction(n_petals = n_dir_bins, column = wind_direction_degree) %>%
+  # adcp_label_speed(column = wind_speed_km_per_hour, n_ints = n_speed_bins) %>%
+  summarise(
+    n = n(),
+    .by = c(wind_direction_degree_labels, wind_speed_km_per_hour_labels,
+            station, n_station)
+  ) %>%
+  mutate(n_prop = n / n_station) %>%
+  adcp_plot_current_rose(
+    speed_col = wind_speed_km_per_hour_labels,
+    direction_col = wind_direction_degree_labels,
+    speed_label = "Wind Speed (km/h)",
+    calculate_prop = FALSE, ncol_legend = 5
+  ) +
+  facet_wrap(~station) +
+  theme(
+    legend.position = "bottom",
+    strip.background = element_rect(fill = "grey50")
+  )
+
+p
 
 ```
 
@@ -198,51 +198,51 @@ leaflet() %>%
 #| results: asis
 #| warning: false
 
-# for(i in seq_along(stations)) {
-#   
-#   station_i <- stations[i]
-#   
-#   cat('\n###', station_i, '\n')
-#   
-#   p <- dat %>% 
-#     filter(
-#       station == station_i,
-#       !is.na(wind_direction_degree)
-#     ) %>% 
-#     mutate(month_utc = month(timestamp_utc, label = TRUE)) %>% 
-#     group_by(month_utc) %>% 
-#     mutate(n_month = n()) %>% 
-#     ungroup() %>% 
-#     summarise(
-#       n = n(),
-#       .by = c(wind_direction_degree_labels, 
-#               wind_speed_km_per_hour_labels,
-#               month_utc, n_month)
-#     ) %>%
-#     mutate(n_prop = n / n_month) %>% 
-#     adcp_plot_current_rose(
-#       speed_col = wind_speed_km_per_hour_labels,
-#       direction_col = wind_direction_degree_labels,
-#       speed_label = "Wind Speed (km/h)",
-#       calculate_prop = FALSE, ncol_legend = 5
-#     ) +
-#     facet_wrap(~month_utc, ncol = 4) +
-#     theme(
-#       text = element_text(size = 8),
-#       legend.position = "bottom",
-#       strip.background = element_rect(fill = "grey50")
-#     )
-#   
-#   subchunkify(p, fig_width = 8)
-#   
-# }
+for(i in seq_along(stations)) {
+
+  station_i <- stations[i]
+
+  cat('\n###', station_i, '\n')
+
+  p <- dat %>%
+    filter(
+      station == station_i,
+      !is.na(wind_direction_degree)
+    ) %>%
+    mutate(month_utc = month(timestamp_utc, label = TRUE)) %>%
+    group_by(month_utc) %>%
+    mutate(n_month = n()) %>%
+    ungroup() %>%
+    summarise(
+      n = n(),
+      .by = c(wind_direction_degree_labels,
+              wind_speed_km_per_hour_labels,
+              month_utc, n_month)
+    ) %>%
+    mutate(n_prop = n / n_month) %>%
+    adcp_plot_current_rose(
+      speed_col = wind_speed_km_per_hour_labels,
+      direction_col = wind_direction_degree_labels,
+      speed_label = "Wind Speed (km/h)",
+      calculate_prop = FALSE, ncol_legend = 5
+    ) +
+    facet_wrap(~month_utc, ncol = 4) +
+    theme(
+      text = element_text(size = 8),
+      legend.position = "bottom",
+      strip.background = element_rect(fill = "grey50")
+    )
+
+  subchunkify(p, fig_width = 8)
+
+}
 
 ```
 :::
 
-# Observations from the SW
+# Observations by Direction
 
-Percent of total observations that occur each month from each direction.
+Proportion of total observations at that occur each month from each direction.
 
 ::: panel-tabset
 
@@ -250,44 +250,70 @@ Percent of total observations that occur each month from each direction.
 #| results: asis
 #| warning: false
 
-dirs <- levels(dat$wind_direction_degree_labels)
-
-for(i in seq_along(dirs)) {
-  
-  dir_i <- dirs[i]
-  
-  cat('\n###', dir_i, '\n')
-  
-  dat_dir <- dat %>% 
-    #filter(wind_direction_degree_labels == dir_i) %>% 
-    mutate(month_utc = month(timestamp_utc, label = TRUE)) %>% 
-    group_by(station) %>% 
-    mutate(n_station = n()) %>% 
-    ungroup() %>% 
+dat_dir <- dat %>% 
+    mutate(month_utc = month(timestamp_utc, label = TRUE)) %>%
+    group_by(station) %>%
+    mutate(n_station = n()) %>%
+    ungroup() %>%
     summarise(
       n = n(),
       .by = c(wind_direction_degree_labels, month_utc, station, n_station)
     ) %>%
-    mutate(n_prop = n / n_station) %>% 
-    filter(wind_direction_degree_labels == dir_i)
-  
-  
-  p <- ggplot(dat_dir, aes(month_utc, n_prop, fill = station)) +
-    geom_col(position = "dodge") +
-    scale_y_continuous("Percet of Observations", labels = scales::percent) +
-    scale_fill_manual(values = pal) +
-    facet_wrap(~station, ncol = 1) + 
-    theme(
-      legend.position = "none", 
+    mutate(n_prop = round(n / n_station, digits = 3)) 
+
+
+ggplot(dat_dir, aes(month_utc, n_prop, col = station, group = station)) + 
+  geom_line() + 
+  facet_wrap(~wind_direction_degree_labels, ncol = 2) +
+  theme(
+     # text = element_text(size = 8),
+      legend.position = "bottom",
       axis.title.x = element_blank(),
       strip.background = element_rect(fill = "grey50")
     )
-  
-##  subchunkify(p, fig_width = 8)
-  ggplotly(p)
-}
-```
 
+#dirs <- levels(dat$wind_direction_degree_labels)
+# 
+# for(i in seq_along(dirs)) {
+#   
+#   dir_i <- dirs[i]
+#   
+#   cat('\n###', dir_i, '\n')
+#   
+#   dat_dir <- dat %>% 
+#     mutate(month_utc = month(timestamp_utc, label = TRUE)) %>% 
+#     group_by(station) %>% 
+#     mutate(n_station = n()) %>% 
+#     ungroup() %>% 
+#     summarise(
+#       n = n(),
+#       .by = c(wind_direction_degree_labels, month_utc, station, n_station)
+#     ) %>%
+#     mutate(n_prop = round(n / n_station, digits = 3)) %>% 
+#     filter(wind_direction_degree_labels == dir_i)
+#   
+#   p <- ggplot(dat_dir, aes(month_utc, n_prop, fill = station)) +
+#     geom_col(position = "dodge") +
+#     scale_fill_manual(values = pal) +
+#     scale_y_continuous(
+#       "Percent of Observations", limits = c(0, 0.045),
+#       labels = scales::percent
+#     ) +
+#     facet_wrap(~station, ncol = 1) + 
+#     theme(
+#       legend.position = "none", 
+#       text = element_text(size = 10),
+#       axis.title.x = element_blank(),
+#       axis.title.y = element_text(vjust = 10),
+#       panel.grid.major.x = element_blank(),
+#       panel.grid.minor.y = element_blank(),
+#       strip.background = element_rect(fill = "grey50"),
+#       panel.spacing.y = unit(2, "lines")
+#     ) 
+#     
+#     print(htmltools::tagList(ggplotly(p, height = 500)))
+# }
+```
 
 :::
 

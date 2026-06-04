@@ -1,0 +1,243 @@
+---
+title: "Explore Wind Data"
+date: "`r Sys.Date()`"
+author: "Danielle Dempsey"
+format: 
+  html:
+    toc: true
+    toc-depth: 3
+    embed-resources: true
+echo: false
+editor_options: 
+  chunk_output_type: console
+---
+
+
+```{r}
+#| include: false
+
+library(dplyr)
+library(ggplot2)
+library(plotly)
+library(RColorBrewer)
+
+theme_set(theme_light())
+
+v_calculate_components <- function(theta_degrees, v_length = 1) {
+  
+  v_x <- v_length * sin(theta_degrees * pi / 180)
+  v_y <- v_length * cos(theta_degrees * pi / 180)
+  
+  data.frame(v_x = v_x, v_y = v_y)
+}
+
+
+# v_col <- "black"
+# pal <- c("#E7298A", "#1B9E77")
+
+# p <- ggplot() +
+#   geom_hline(yintercept = 0, col = "grey50") +
+#   geom_vline(xintercept = 0, col = "grey50") +
+#   scale_x_continuous("x", limits = c(-1, 1)) +
+#   scale_y_continuous("y", limits = c(-1,1)) +
+#   coord_fixed(ratio = 1) #+  
+#   theme(
+#     legend.position = "inside",
+#     legend.position.inside =  c(0.15, 0.8)
+#   )
+
+v_plot_components <- function(
+    theta_degrees, v_length = 1, add_components = TRUE
+) {
+  
+  v <- v_calculate_components(theta_degrees, v_length) %>% 
+    mutate(theta_degrees = ordered(theta_degrees, levels = theta_degrees))
+  
+  if(nrow(v) < 3) {
+    n_theta <- 3
+  } else n_theta <- nrow(v)
+  
+  
+  p_v <- ggplot() +
+    geom_hline(yintercept = 0, col = "grey50") +
+    geom_vline(xintercept = 0, col = "grey50") +
+    scale_x_continuous("x", limits = c(-1, 1)) +
+    scale_y_continuous("y", limits = c(-1,1)) +
+    coord_fixed(ratio = 1)+ 
+    geom_segment(
+      aes(x = 0, y = 0, xend = v[,1], yend = v[,2], col = v[,3]),
+      arrow = arrow(length = unit(0.3, "cm"))
+    ) +
+    scale_colour_manual("theta (degrees)", values = brewer.pal(n_theta, "Dark2"))
+  
+  if(isTRUE(add_components)) {
+    
+    p_v <- p_v +
+      # x component
+      geom_segment(
+        aes(x = 0, xend = v[,1], y = v[,2], yend = v[,2]),
+        arrow = arrow(length = unit(0.3, "cm")), linetype = 2,
+      ) +
+      # y component
+      geom_segment(
+        aes(x = 0, xend = 0, y = 0, yend = v[,2]),
+        arrow = arrow(length = unit(0.3, "cm")), linetype = 2
+      )
+  }
+  
+  p_v
+}
+
+# v <- data.frame(
+#   x_start = c(0, 0, 0, 0),
+#   y_start = c(0, 0, 0, 0),
+#   angle_deg = c(0, 360, 45, 20),
+#   length = c(1, 0.5, 1, 0.75)
+# ) %>% 
+#   mutate(
+#     angle_rad = round(angle_deg * pi / 180, digits = 5),
+#     x_end = x_start + length * sin(angle_rad),
+#     y_end = y_start + length * cos(angle_rad),
+#     angle_deg = ordered(angle_deg, levels = angle_deg)
+#   # ) 
+
+# v %>% 
+#   plot_ly(x = ~x_start,
+#           y = ~y_start) %>% 
+#   add_markers() %>% 
+#   add_annotations(text = ~angle_deg,
+#                   showarrow = TRUE,
+#                   xref = "x_start", axref = "x_start",
+#                   yref = "y_start", ayref = "y_start",
+#                   x = ~x_end,
+#                   ax = ~x_start,
+#                   y = ~y_end,
+#                   ay = ~y_start)
+
+
+
+```
+
+# Motivation
+
+Consider two vectors, one pointing to 0 degrees and one pointing to 360 degrees.
+
+These vectors both point North. The average should therefore also point North.
+
+```{r}
+#| fig-height: 4
+#| echo: false
+
+p2
+```
+
+Taking a simple average:
+
+```{r}
+#| echo: true
+
+v_north <- c(0, 360)
+
+mean(v_north)
+```
+
+180 degrees points South!
+
+We need another way to calculate the average direction.
+
+# Trigonometry
+
+## Example 1
+
+Now let's consider a vector of length 1 pointing to the North-East, 45 degrees from vertical.
+
+```{r}
+#| fig-height: 3
+#| echo: false
+
+
+v_plot_components
+
+
+v_45 <- v %>% filter(angle_deg == 45)
+
+p + 
+  geom_segment(
+    data = filter(v, angle_deg %in% c(45)),
+    aes(
+      x = x_start, y = y_start, xend = x_end, yend = y_end
+    ),
+    col = v_col,
+    arrow = arrow(length = unit(0.3, "cm"))
+  ) 
+```
+
+This can be broken down into 2 components: one along the x-axis, and one along the y-axis.
+
+```{r}
+
+plot_vector_components(p, v_45) +
+  annotate("text", x = 0.07, y = 0.15, label = "45\u00B0")
+
+```
+
+This makes a right-angle triangle, with our original vector as the hypotenuse and the angle theta between the y-axis and our vector.
+
+Now we get to use our high school trigonometry: SOH CAH TOA!
+
+### x component
+
+We use the sine to calculate the length of the x component, since it is opposite from the angle theta (SOH).
+
+$v_x = v_{length} * sin(theta)$
+
+This equation assumes theta is in radians.
+
+Recall: $rad = degrees * pi / 180$
+
+```{r}
+
+v_x = 1 * sin(45 * pi / 180)
+
+v_x
+```
+
+### y component
+
+We use the cosine to calculate the length of the y component, since it is adjacent to the angle theta (CAH).
+
+$v_y = v_{length} * cos(theta)$
+
+
+```{r}
+
+v_y = 1 * cos(45 * pi / 180)
+
+v_y
+```
+
+Note that `v_x` and `v_y` have the same length. This is because theta = 45 degrees.
+
+If you remember your unit circle, you might have also noticed the component lengths correspond to sqrt(2) / 2.
+
+## Example 2
+
+Now let's consider a vector of length 0.75 pointing 20 degrees from vertical.
+
+
+```{r}
+
+plot_vector_components(p, filter(v, angle_deg == 20)) +
+  annotate("text", x = 0.07, y = 0.35, label = "20\u00B0")
+
+```
+
+
+```{r}
+v_x = 0.75 * sin(20 * pi / 180)
+
+v_y = 0.75 * cos(20 * pi / 180)
+
+v_x
+v_y
+```

@@ -4,6 +4,8 @@ format:
     toc: true
     toc-depth: 3
     embed-resources: true
+params:
+  round_int: round_int
 echo: false
 dpi: 600
 editor_options: 
@@ -30,12 +32,14 @@ source(here("functions/subchunkify.R"))
 
 theme_set(theme_light())
 
-dat <- fread(here("data/climate_data_2_hours.csv"), data.table = FALSE) %>% 
-  pivot_longer(
-    cols = air_temperature:precipitation_mm, 
-    values_to = "value", names_to = "variable"
-  ) %>% 
-  filter(!is.na(value))
+round_int <- params$round_int
+
+dat <- fread(
+  here(paste0("data/climate_data_", gsub(" ", "_", round_int),  ".csv")), 
+  data.table = FALSE
+) %>% 
+  filter(!is.na(value)) %>% 
+  select(-c(v_x_mean, v_y_mean))
 
 met_locations <- fread(
   here("data/climate_station_locations.csv"), data.table = FALSE

@@ -8,6 +8,8 @@ format:
     toc-depth: 3
     embed-resources: true
 echo: false
+params:
+  n_dir_bins: n_dir_bins
 editor_options: 
   chunk_output_type: console
 ---
@@ -32,13 +34,7 @@ library(tidyr)
 library(viridis)
 
 source(here("functions/subchunkify.R"))
-
-# read in all files in path and bind them together
-foo <- function(path) {
-  map_df(
-    .x = list.files(path, full.names = TRUE), .f = fread, fill = TRUE
-  ) 
-}
+source(here("functions/helpers.R"))
 
 # from west to east
 stations <- c("YARMOUTH RCS", "LUNENBURG", "BEAVER ISLAND (AUT)", "HART ISLAND (AUT)" )
@@ -47,15 +43,13 @@ stations <- c("YARMOUTH RCS", "LUNENBURG", "BEAVER ISLAND (AUT)", "HART ISLAND (
 #pal <- brewer.pal(4, "Dark2")
 pal <- viridis(4, option = "F", begin = 0.2, end = 0.8)
 n_speed_bins <- 10
-n_dir_bins <- 8
+n_dir_bins <- params$n_dir_bins
 theme_set(theme_light())
 # ensures the Plotly JS dependencies are loaded being called in the loop
 #htmltools::tagList(plot_ly(x = rnorm(10), type = "histogram"))
 
 # read in data
-dat_folders <- list.dirs(here("data-raw/"), full.names = TRUE, recursive = FALSE)
-dat_folders <- dat_folders[-which(grepl("ast", dat_folders))]
-dat_folders <- dat_folders[-which(grepl("cygwin", dat_folders))]
+dat_folders <- list_climate_data_folders()
 
 dat <- map_df(.x = dat_folders, .f = foo) %>% 
   select(
@@ -227,11 +221,16 @@ for(i in seq_along(stations)) {
 
 # Observations by Direction
 
+## Percent 
+
 Percent of observations from each direction for each month and station.
 
 ```{r}
 #| results: asis
 #| warning: false
+
+if(n_dir_bins == 8) h <- 600
+if(n_dir_bins == 16) h <- 1200
 
 dat_dir <- dat %>% 
     mutate(month_utc = month(timestamp_utc, label = TRUE)) %>%
@@ -246,7 +245,6 @@ dat_dir <- dat %>%
     n_prop = round(n / n_station, digits = 3),
     n_percent = 100 * n_prop
   ) 
-
 
 p <- ggplot(
   dat_dir, 
@@ -271,51 +269,47 @@ p <- ggplot(
     strip.background = element_rect(fill = "grey50")
   )
 
-ggplotly(p, height = 500, tooltip = "text")
+ggplotly(p, height = h, tooltip = "text")
 
-#dirs <- levels(dat$wind_direction_degree_labels)
-# 
-# for(i in seq_along(dirs)) {
-#   
-#   dir_i <- dirs[i]
-#   
-#   cat('\n###', dir_i, '\n')
-#   
-#   dat_dir <- dat %>% 
-#     mutate(month_utc = month(timestamp_utc, label = TRUE)) %>% 
-#     group_by(station) %>% 
-#     mutate(n_station = n()) %>% 
-#     ungroup() %>% 
-#     summarise(
-#       n = n(),
-#       .by = c(wind_direction_degree_labels, month_utc, station, n_station)
-#     ) %>%
-#     mutate(n_prop = round(n / n_station, digits = 3)) %>% 
-#     filter(wind_direction_degree_labels == dir_i)
-#   
-#   p <- ggplot(dat_dir, aes(month_utc, n_prop, fill = station)) +
-#     geom_col(position = "dodge") +
-#     scale_fill_manual(values = pal) +
-#     scale_y_continuous(
-#       "Percent of Observations", limits = c(0, 0.045),
-#       labels = scales::percent
-#     ) +
-#     facet_wrap(~station, ncol = 1) + 
-#     theme(
-#       legend.position = "none", 
-#       text = element_text(size = 10),
-#       axis.title.x = element_blank(),
-#       axis.title.y = element_text(vjust = 10),
-#       panel.grid.major.x = element_blank(),
-#       panel.grid.minor.y = element_blank(),
-#       strip.background = element_rect(fill = "grey50"),
-#       panel.spacing.y = unit(2, "lines")
-#     ) 
-#     
-#     print(htmltools::tagList(ggplotly(p, height = 500)))
-# }
 ```
 
 
+## Absolute
 
+Number of observations from each direction for each month and station.
+
+```{r}
+#| results: asis
+#| warning: false
+
+dat_dir <- dat %>% 
+  mutate(month_utc = month(timestamp_utc, label = TRUE)) %>%
+  summarise(
+    n = n(),
+    .by = c(wind_direction_degree_labels, month_utc, station)
+  ) 
+
+p <- ggplot(
+  dat_dir, 
+  aes(month_utc, 
+      n, col = fct_rev(station), group = station,
+      text = paste0(
+        "month: ", month_utc, "\n",
+        "value: ", n, "\n",
+        "station: ", station, "\n"
+      ))) + 
+  geom_line() + 
+  scale_y_continuous("Number of Observations") +
+  scale_color_manual("station", values = pal) +
+  facet_wrap(~wind_direction_degree_labels, ncol = 2) +
+  theme(
+    legend.position = "bottom",
+    axis.title.x = element_blank(),
+    panel.grid.minor.y = element_blank(),
+    panel.spacing.y = unit(1, "lines"),
+    strip.background = element_rect(fill = "grey50")
+  )
+
+ggplotly(p, height = h, tooltip = "text")
+```
 

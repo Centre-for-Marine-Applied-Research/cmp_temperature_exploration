@@ -413,7 +413,7 @@ The average vector is "pulled" towards the longer vector.
 
 ## Example 3
 
-A vector of length 1 at 340 degrees and a vector of length 0.25 at 90 degrees. The average vector will be weighted by the largest original vector.
+A vector of length 1 at 340 degrees and a vector of length 0.25 at 190 degrees. The average vector will be weighted by the largest original vector.
 
 ```{r}
 v_avg <- v_calculate_average(

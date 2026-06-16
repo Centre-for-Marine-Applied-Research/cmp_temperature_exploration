@@ -1,0 +1,408 @@
+---
+title: "Bakun's Upwelling Index"
+date: "`r Sys.Date()`"
+author: "Danielle Dempsey"
+format: 
+  html:
+    toc: true
+    toc-depth: 3
+    embed-resources: true
+echo: false
+editor_options: 
+  chunk_output_type: console
+---
+
+
+```{r}
+#| include: false
+
+library(dplyr)
+library(ggplot2)
+library(oce)
+#library(plotly)
+library(RColorBrewer)
+
+theme_set(theme_light())
+
+v_calculate_components <- function(theta_degrees, v_length) {
+  
+  v_x <- v_length * sin(theta_degrees * pi / 180)
+  v_y <- v_length * cos(theta_degrees * pi / 180)
+  
+  data.frame(v_x = v_x, v_y = v_y)
+}
+
+
+v_plot_components <- function(
+    theta_degrees, v_length = 1, add_components = TRUE, pal = NULL
+) {
+  
+  v <- v_calculate_components(theta_degrees, v_length) %>% 
+    mutate(
+      theta_degrees = ordered(theta_degrees, levels = sort(theta_degrees))
+      )
+  
+  if(nrow(v) < 3) {
+    n_theta <- 3
+  } else n_theta <- nrow(v)
+  
+  if(is.null(pal)) pal <- brewer.pal(n_theta, "Dark2")
+  
+  
+  p_v <- ggplot() +
+    geom_hline(yintercept = 0, col = "grey60") +
+    geom_vline(xintercept = 0, col = "grey60") +
+    scale_x_continuous("x", limits = c(-5, 5)) +
+    scale_y_continuous("y", limits = c(-5, 5)) +
+    coord_fixed(ratio = 1)+ 
+    geom_segment(
+      aes(x = 0, y = 0, xend = v[,1], yend = v[,2], col = v[,3]),
+      arrow = arrow(length = unit(0.3, "cm"), type = "closed")
+    ) +
+    scale_colour_manual("theta (degrees)", values = pal)
+  
+  if(isTRUE(add_components)) {
+    
+    p_v <- p_v +
+      # x component
+      geom_segment(
+        aes(x = 0, xend = v[,1], y = v[,2], yend = v[,2]),
+        arrow = arrow(length = unit(0.2, "cm"), type = "closed"),
+        linetype = 2,
+      ) +
+      # y component
+      geom_segment(
+        aes(x = 0, xend = 0, y = 0, yend = v[,2]),
+        arrow = arrow(length = unit(0.2, "cm"), type = "closed"),
+        linetype = 2
+      )
+  }
+  
+  p_v
+}
+
+```
+
+# Overview
+
+The Bakun Upwelling Index (BUI) is the component of Ekman transport that is  perpendicular to the coast. Positive values indicate upwelling, and negative values indicate downwelling.
+
+Ekman transport is the net movement of ocean water perpendicular to the wind direction. A combination of wind stress and Coriolis effect cause the water to flow 90° to the right in the Northern Hemisphere (and 90° to the left in the Southern Hemisphere).
+
+Following Scrosati and Ellrich, 2023 (and references therein), Ekman transport is calculated as :
+
+$M = \tau / (\rho_{water} * f)$.
+
+$\tau$ is the wind stress:
+
+$\tau = \rho_{air} * C_D * U^2$,
+
+where:
+
+$\rho_{air}$ is air density (1.28 kg/m$^3$), $C_D$ is the wind drag coefficient (0.0015), and $U$ is the wind speed in m/s.
+
+$\rho_{water}$ is sea water density (1026 kg/m$^3$).
+
+$f$ is the Coriolis parameter, which is dependent on latitude.
+
+# Calculation Example
+
+Let's take a simple example of wind blowing at 5 m/s along the coast of Nova Scotia (from 240°, towards 60°).
+
+```{r}
+v_plot_components(
+  theta_degrees = c(60, 240), v_length = c(5, 5), 
+  add_components = FALSE
+)
+```
+
+## Resolve Wind Speed Components
+
+We first calculate the x and y (u and v) components of the wind. Recall:
+
+$ux = (wind\ speed) * sin(theta)$
+$vy = (wind\ speed) * cos(theta)$
+
+Where theta is the wind direction in radians, relative to the North.
+
+```{r}
+#| echo: true
+
+# wind components relative to x and y --> these were negative in the 
+# original code. Probably depends on which vector you use (blowing to or blowing from)
+ux = 5 * sin(240 * pi / 180.)
+vy = 5 * cos(240 * pi / 180.)
+
+ux
+vy
+```
+
+```{r}
+v_plot_components(theta_degrees = 240, v_length = 5, pal = "#D95F02")
+```
+
+## Calculate Wind Stress
+
+*I think this was missing in original code*
+
+Recall 
+$\tau_x = \rho_{air} * C_D * ux^2$
+
+$\tau_y = \rho_{air} * C_D * vy^2$
+
+Pause to think about units:
+$kg/m^3 * m^2/s^2 = kg / (m * s^2) = Pa$
+
+Pascals (Pa) is the SI unit for pressure and stress, so this makes sense!
+
+```{r}
+#| echo: true
+
+tau_x = 1.28 * 0.0015 * ux^2
+tau_y = 1.28 * 0.0015 * vy^2
+
+tau_x
+tau_y
+```
+
+
+## Ekman Transport
+
+Next, we calculate the Ekman transport in in the x and y (u and v) directions. Assume a latitude of 45°. 
+
+Recall:
+
+$M_x = \tau_x / (\rho_{water} * f)$
+
+$M_y = \tau_y / (\rho_{water} * f)$
+
+We can use `oce::coriolis()` to calculate $f$ at the latitude of interest.
+
+Pause to think about units:
+$kg/(m * s^2) / (kg/m^3 * s^-1) = kg/(m * s^2) * (m^3*s)/kg = m^2/s$
+
+*Not sure if this makes sense. Scrosati has units of m3/s. Might need to multiply by a coast length to get volume*
+
+```{r}
+#| echo: true
+
+M_x = tau_x / (1026 * coriolis(45))
+M_y = tau_y / (1026 * coriolis(45))
+
+M_x
+M_y
+```
+
+**check that using different symbols for the different angles**
+
+Overall Ekman transport:
+
+$M = sqrt(M_x^2 + M_y^2)$
+
+Ekman transport direction:
+
+$\beta = atan2(M_x, M_y)$
+
+```{r}
+#| echo: true
+M = sqrt(M_x^2 + M_y^2)
+
+beta <- round(atan2(M_x, M_y) * 180/pi, digits = 2)
+beta <- (360 + beta) %% 360 # maps from (-180 to 180) to (0, 359)
+
+M
+beta
+```
+
+-- this doesn't seem right. Shouldn't it be perpendicular to the wind? So 330 degrees (or 150 degrees)
+
+
+```{r}
+#| message: false
+
+v_plot_components(beta, M) +
+  scale_x_continuous("x", limits = c(-0.5, 0.5)) +
+  scale_y_continuous("y", limits = c(-0.5, 0.5)) 
+
+# ggplot() +
+#   geom_hline(yintercept = 0, col = "grey60") +
+#   geom_vline(xintercept = 0, col = "grey60") +
+#   scale_x_continuous("x", limits = c(-0.5, 0.5)) +
+#   scale_y_continuous("y", limits = c(-0.5, 0.5)) +
+#   coord_fixed(ratio = 1) +
+#   geom_segment(
+#     aes(x = 0, y = 0, xend = M_x, yend = 0), col = "#E7298A",
+#     arrow = arrow(length = unit(0.3, "cm"), type = "closed")
+#   ) +
+#   geom_segment(
+#     aes(x = 0, y = 0, xend = 0, yend = M_y), col = "#E7298A",
+#     arrow = arrow(length = unit(0.3, "cm"), type = "closed")
+#   )
+```
+
+## Bakun's Index
+
+We found Ekman transport in the x and y (u and v directions), and the overall Ekman transport and direction relative to the vertical.
+
+For the BUI, we are interested in the Ekman transport **perpendicular to the coast**.
+
+We can use the rotation matrix to rotate $M_x$ and $M_y$ so that $M_x$ is parallel to the coast, which means $M_y$ will be perpendicular to the coast.
+
+### Linear Algebra Review: The rotation matrix
+
+Consider a point $[x, y]$. If the point is rotated $\theta$ degrees, the new coordinates are given by:
+
+```{=tex}
+\begin{bmatrix} x' \\ y' \end{bmatrix} = \begin{bmatrix} cos(\theta) & -sin(\theta) \\ sin(\theta) & cos(\theta) \end{bmatrix} \begin{bmatrix} x \\ y \end{bmatrix}
+```
+
+Positive $\theta$ results in counter-clockwise rotation.
+
+Negative $\theta$ results in clockwise rotation.
+
+Using matrix multiplication,
+
+$x' = cos(\theta)x - sin(\theta)y$
+
+$y' = sin(\theta)x + cos(\theta)y$
+
+Consider a point, p1 at $[1, 0]$ rotated 30° from the horizontal. The new coordinates are:
+
+```{r}
+#| echo: true
+
+p1 <- c(1, 0)
+
+x_new <- cos(30 * pi / 180) * 1 - sin(30 * pi / 180) * 0
+y_new <- sin(30 * pi / 180) * 1 + cos(30 * pi / 180) * 0
+
+x_new
+y_new
+```
+
+```{r}
+ggplot() +
+  geom_hline(yintercept = 0, col = "grey60") +
+  geom_vline(xintercept = 0, col = "grey60") +
+  scale_x_continuous("x", limits = c(-1.1, 1.1)) +
+  scale_y_continuous("y", limits = c(-1.1, 1.1)) +
+  coord_fixed(ratio = 1) +
+  geom_segment(
+    aes(x = 0, y = 0, xend = x_new, yend = y_new, col = "[0.87, 0.5]"),
+    arrow = arrow(length = unit(0.3, "cm"), type = "closed")
+  ) +
+  geom_segment(
+    aes(x = 0, y = 0, xend = 1, yend = 0, col = "[1, 0]"), 
+    arrow = arrow(length = unit(0.3, "cm"), type = "closed")
+  ) +
+  annotate("text", x = 0.25, y = 0.06, label = "30\u00B0") +
+  theme(
+    legend.title = element_blank(),
+    legend.position = "inside",
+    legend.position.inside = c(0.85, 0.9)
+  )
+```
+
+Now let's do two points, p1 at $[1, 0]$, and p2 at $[0, 1]$ rotated 45° from the horizontal. The new coordinates are:
+
+**This isn't working**
+
+```{r}
+#| echo: true
+
+alpha <- 45 * pi / 180
+
+p <- matrix(data= c(1, 0, 0, 1), nrow = 2, ncol = 2)
+
+r <- matrix(data = c(cos(alpha), sin(alpha), -sin(alpha), cos(alpha)), ncol = 2)
+
+
+new_coords <- r * p
+
+
+x_new <- cos(45 * pi / 180) * p[, 1] - sin(45 * pi / 180) * p[, 1]
+y_new <- sin(45 * pi / 180) * p[, 2] + cos(45 * pi / 180) * p[, 2]
+
+x_new
+y_new
+```
+
+```{r}
+ggplot() +
+  geom_hline(yintercept = 0, col = "grey60") +
+  geom_vline(xintercept = 0, col = "grey60") +
+  scale_x_continuous("x", limits = c(-1.1, 1.1)) +
+  scale_y_continuous("y", limits = c(-1.1, 1.1)) +
+  coord_fixed(ratio = 1) +
+  geom_segment(
+    aes(x = 0, y = 0, xend = p[1, 1], yend = p[2, 1], col = "old1"),
+    arrow = arrow(length = unit(0.3, "cm"), type = "closed")
+  ) +
+  geom_segment(
+    aes(x = 0, y = 0, xend = p[1, 2], yend = p[2, 2], col = "old2"),
+    arrow = arrow(length = unit(0.3, "cm"), type = "closed")
+  ) +
+  geom_segment(
+    aes(x = 0, y = 0, xend = new_coords[1, 1], yend = new_coords[2, 1], col = "new1"), 
+    arrow = arrow(length = unit(0.3, "cm"), type = "closed")
+  ) 
+  
+  
+  theme(
+    legend.title = element_blank(),
+    legend.position = "inside",
+    legend.position.inside = c(0.85, 0.9)
+  )
+```
+
+## Back to Bakun's Index
+
+Now we can calculate the components that are perpendicular and parallel to the coast by rotating them by the coastline angle $/alpha$. ???
+
+*other code uses 360 - theta, which results in the opposite sign for the sine terms*
+
+$M_{x} = cos(\alpha) * M_x - sin(\alpha) * M_y$
+
+$M_{y} = sin(\alpha) * M_x + cos(\alpha) * M_y$
+
+
+```{r}
+alpha <- 60 * pi / 180
+
+ek_x <- cos(alpha) * M_x - sin(alpha) * M_y
+
+ek_y <- sin(alpha) * M_x + cos(alpha) * M_y
+
+```
+
+
+```{r}
+ggplot() +
+  geom_hline(yintercept = 0, col = "grey60") +
+  geom_vline(xintercept = 0, col = "grey60") +
+  scale_x_continuous("x", limits = c(-0.5, 0.5)) +
+  scale_y_continuous("y", limits = c(-0.5, 0.5)) +
+  coord_fixed(ratio = 1) +
+  geom_segment(
+    aes(x = 0, y = 0, xend = ek_x, yend = ek_y),
+    arrow = arrow(length = unit(0.3, "cm"), type = "closed")
+  ) +
+  geom_segment(
+    aes(x = 0, y = 0, xend = M_x, yend = M_y), 
+    arrow = arrow(length = unit(0.3, "cm"), type = "closed")
+  ) +
+ # annotate("text", x = 0.25, y = 0.06, label = "30\u00B0") +
+  theme(
+    legend.title = element_blank(),
+    legend.position = "inside",
+    legend.position.inside = c(0.85, 0.9)
+  )
+```
+
+### From Total Wind
+
+This is not the same as M for some reason
+
+```{r}
+M_2 = (1.28 * 0.0015 * 5^2) / (1026 * coriolis(45))
+```

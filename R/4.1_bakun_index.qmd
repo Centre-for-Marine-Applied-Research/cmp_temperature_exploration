@@ -15,17 +15,17 @@ editor_options:
 
 ```{r}
 #| include: false
+ 
+knitr::opts_chunk$set(fig.width = 8, fig.height = 4)
 
 library(dplyr)
 library(ggplot2)
 library(oce)
-#library(plotly)
 library(RColorBrewer)
 
 theme_set(theme_light())
 
 v_calculate_components <- function(theta_degrees, v_length) {
-  
   v_x <- v_length * sin(theta_degrees * pi / 180)
   v_y <- v_length * cos(theta_degrees * pi / 180)
   
@@ -34,13 +34,18 @@ v_calculate_components <- function(theta_degrees, v_length) {
 
 
 v_plot_components <- function(
-    theta_degrees, v_length = 1, add_components = TRUE, pal = NULL
+    theta_degrees, 
+    v_length = 1, 
+    add_components = TRUE, 
+    pal = NULL,
+    lims = 1,
+    legend_pos = c(0.8, 0.9)
 ) {
   
   v <- v_calculate_components(theta_degrees, v_length) %>% 
     mutate(
       theta_degrees = ordered(theta_degrees, levels = sort(theta_degrees))
-      )
+    )
   
   if(nrow(v) < 3) {
     n_theta <- 3
@@ -48,18 +53,21 @@ v_plot_components <- function(
   
   if(is.null(pal)) pal <- brewer.pal(n_theta, "Dark2")
   
-  
   p_v <- ggplot() +
     geom_hline(yintercept = 0, col = "grey60") +
     geom_vline(xintercept = 0, col = "grey60") +
-    scale_x_continuous("x", limits = c(-5, 5)) +
-    scale_y_continuous("y", limits = c(-5, 5)) +
+    scale_x_continuous("x", limits = c(-lims, lims)) +
+    scale_y_continuous("y", limits = c(-lims, lims)) +
     coord_fixed(ratio = 1)+ 
     geom_segment(
       aes(x = 0, y = 0, xend = v[,1], yend = v[,2], col = v[,3]),
       arrow = arrow(length = unit(0.3, "cm"), type = "closed")
     ) +
-    scale_colour_manual("theta (degrees)", values = pal)
+    scale_colour_manual("theta (degrees)", values = pal) +
+    theme(
+      legend.position = "inside",
+      legend.position.inside = c(0.85, 0.9)
+    )
   
   if(isTRUE(add_components)) {
     
@@ -80,7 +88,6 @@ v_plot_components <- function(
   
   p_v
 }
-
 ```
 
 # Overview
@@ -112,11 +119,11 @@ Let's take a simple example of wind blowing at 5 m/s along the coast of Nova Sco
 ```{r}
 v_plot_components(
   theta_degrees = c(60, 240), v_length = c(5, 5), 
-  add_components = FALSE
-)
+  add_components = FALSE, lims = 5
+) 
 ```
 
-## Resolve Wind Speed Components
+## 1. Resolve Wind Speed Components
 
 We first calculate the x and y (u and v) components of the wind. Recall:
 
@@ -138,22 +145,31 @@ vy
 ```
 
 ```{r}
-v_plot_components(theta_degrees = 240, v_length = 5, pal = "#D95F02")
+v_plot_components(
+  theta_degrees = 240, v_length = 5, pal = "#D95F02", lims = 5
+) +
+  theme(
+    legend.position = "inside",
+    legend.position.inside = c(0.85, 0.9)
+  )
 ```
 
-## Calculate Wind Stress
+## 2. Calculate Wind Stress
 
 *I think this was missing in original code*
 
 Recall 
-$\tau_x = \rho_{air} * C_D * ux^2$
 
-$\tau_y = \rho_{air} * C_D * vy^2$
+$\tau_x = \rho_{air} * C_D * u_x^2$
 
-Pause to think about units:
+$\tau_y = \rho_{air} * C_D * v_y^2$
+
+::: {.callout-tip collapse="false"}
+### Pause to think about units:
 $kg/m^3 * m^2/s^2 = kg / (m * s^2) = Pa$
 
 Pascals (Pa) is the SI unit for pressure and stress, so this makes sense!
+:::
 
 ```{r}
 #| echo: true
@@ -166,7 +182,7 @@ tau_y
 ```
 
 
-## Ekman Transport
+## 3. Ekman Transport
 
 Next, we calculate the Ekman transport in in the x and y (u and v) directions. Assume a latitude of 45°. 
 
@@ -178,10 +194,12 @@ $M_y = \tau_y / (\rho_{water} * f)$
 
 We can use `oce::coriolis()` to calculate $f$ at the latitude of interest.
 
+::: {.callout-tip collapse="false"}
 Pause to think about units:
 $kg/(m * s^2) / (kg/m^3 * s^-1) = kg/(m * s^2) * (m^3*s)/kg = m^2/s$
 
 *Not sure if this makes sense. Scrosati has units of m3/s. Might need to multiply by a coast length to get volume*
+:::
 
 ```{r}
 #| echo: true
@@ -192,8 +210,6 @@ M_y = tau_y / (1026 * coriolis(45))
 M_x
 M_y
 ```
-
-**check that using different symbols for the different angles**
 
 Overall Ekman transport:
 
@@ -220,27 +236,14 @@ beta
 ```{r}
 #| message: false
 
-v_plot_components(beta, M) +
-  scale_x_continuous("x", limits = c(-0.5, 0.5)) +
-  scale_y_continuous("y", limits = c(-0.5, 0.5)) 
-
-# ggplot() +
-#   geom_hline(yintercept = 0, col = "grey60") +
-#   geom_vline(xintercept = 0, col = "grey60") +
-#   scale_x_continuous("x", limits = c(-0.5, 0.5)) +
-#   scale_y_continuous("y", limits = c(-0.5, 0.5)) +
-#   coord_fixed(ratio = 1) +
-#   geom_segment(
-#     aes(x = 0, y = 0, xend = M_x, yend = 0), col = "#E7298A",
-#     arrow = arrow(length = unit(0.3, "cm"), type = "closed")
-#   ) +
-#   geom_segment(
-#     aes(x = 0, y = 0, xend = 0, yend = M_y), col = "#E7298A",
-#     arrow = arrow(length = unit(0.3, "cm"), type = "closed")
-#   )
+v_plot_components(beta, M, lims = 0.5) +
+  theme(
+    legend.position = "inside",
+    legend.position.inside = c(0.8, 0.9)
+  )
 ```
 
-## Bakun's Index
+## 4. Bakun's Index
 
 We found Ekman transport in the x and y (u and v directions), and the overall Ekman transport and direction relative to the vertical.
 
@@ -248,6 +251,7 @@ For the BUI, we are interested in the Ekman transport **perpendicular to the coa
 
 We can use the rotation matrix to rotate $M_x$ and $M_y$ so that $M_x$ is parallel to the coast, which means $M_y$ will be perpendicular to the coast.
 
+::: {.callout-note collapse="false"}
 ### Linear Algebra Review: The rotation matrix
 
 Consider a point $[x, y]$. If the point is rotated $\theta$ degrees, the new coordinates are given by:
@@ -299,35 +303,40 @@ ggplot() +
   theme(
     legend.title = element_blank(),
     legend.position = "inside",
-    legend.position.inside = c(0.85, 0.9)
+    legend.position.inside = c(0.8, 0.9)
   )
 ```
 
-Now let's do two points, p1 at $[1, 0]$, and p2 at $[0, 1]$ rotated 45° from the horizontal. The new coordinates are:
-
-**This isn't working**
+Now let's do two points, p1 at $[1, 0]$, and p2 at $[0, 1]$ rotated 45° from the horizontal. 
 
 ```{r}
 #| echo: true
 
 alpha <- 45 * pi / 180
 
-p <- matrix(data= c(1, 0, 0, 1), nrow = 2, ncol = 2)
+# check how matrices are created - filles in columns first
+x <-  matrix(data = c("A", "B", "C", "D"), nrow = 2)
+x
 
-r <- matrix(data = c(cos(alpha), sin(alpha), -sin(alpha), cos(alpha)), ncol = 2)
+# matrix of points. First column is p1 and second column is p2
+p <- matrix(data = c(1, 0, 0, 1), nrow = 2)
 
-
-new_coords <- r * p
-
-
-x_new <- cos(45 * pi / 180) * p[, 1] - sin(45 * pi / 180) * p[, 1]
-y_new <- sin(45 * pi / 180) * p[, 2] + cos(45 * pi / 180) * p[, 2]
+x_new <- cos(45 * pi / 180) * p[1,] - sin(45 * pi / 180) * p[2,]
+y_new <- sin(45 * pi / 180) * p[1,] + cos(45 * pi / 180) * p[2,]
 
 x_new
 y_new
+
+# using matrix multiplication (make sure to use the %*% operator):
+r <- matrix(data = c(cos(alpha), sin(alpha), -sin(alpha), cos(alpha)), ncol = 2)
+
+p_r <- r %*% p
+
+p_r
 ```
 
 ```{r}
+
 ggplot() +
   geom_hline(yintercept = 0, col = "grey60") +
   geom_vline(xintercept = 0, col = "grey60") +
@@ -335,31 +344,28 @@ ggplot() +
   scale_y_continuous("y", limits = c(-1.1, 1.1)) +
   coord_fixed(ratio = 1) +
   geom_segment(
-    aes(x = 0, y = 0, xend = p[1, 1], yend = p[2, 1], col = "old1"),
+    aes(x = 0, y = 0, xend = p[1,], yend = p[2, ], col = "p"),
     arrow = arrow(length = unit(0.3, "cm"), type = "closed")
   ) +
   geom_segment(
-    aes(x = 0, y = 0, xend = p[1, 2], yend = p[2, 2], col = "old2"),
+    aes(x = 0, y = 0, xend = p_r[1,], yend = p_r[2,], col = "p_rotated"), 
     arrow = arrow(length = unit(0.3, "cm"), type = "closed")
   ) +
-  geom_segment(
-    aes(x = 0, y = 0, xend = new_coords[1, 1], yend = new_coords[2, 1], col = "new1"), 
-    arrow = arrow(length = unit(0.3, "cm"), type = "closed")
-  ) 
-  
-  
   theme(
-    legend.title = element_blank(),
     legend.position = "inside",
-    legend.position.inside = c(0.85, 0.9)
+    legend.position.inside = c(0.8, 0.1)
   )
 ```
+:::
 
-## Back to Bakun's Index
+## 4. Bakun's Index
+Now we can calculate the components that are perpendicular and parallel to the coast by rotating them by the coastline angle $\alpha$. 
 
-Now we can calculate the components that are perpendicular and parallel to the coast by rotating them by the coastline angle $/alpha$. ???
+:::{.callout-note collapse="false"}
+We want to rotate the vectors clockwise, so we actually use -$\alpha$ or 360° - $\alpha$ in the code.
 
-*other code uses 360 - theta, which results in the opposite sign for the sine terms*
+**Is this because the coast is on the left??? Or just by convention?**
+:::
 
 $M_{x} = cos(\alpha) * M_x - sin(\alpha) * M_y$
 
@@ -367,16 +373,23 @@ $M_{y} = sin(\alpha) * M_x + cos(\alpha) * M_y$
 
 
 ```{r}
-alpha <- 60 * pi / 180
 
-ek_x <- cos(alpha) * M_x - sin(alpha) * M_y
+alpha <- -60 * pi / 180
 
-ek_y <- sin(alpha) * M_x + cos(alpha) * M_y
+r <- matrix(
+  data = c(cos(alpha), sin(alpha), -sin(alpha), cos(alpha)), 
+  ncol = 2
+)
+
+M_mat <- matrix(data = c(M_x, 0, 0, M_y), nrow = 2)
+
+M_mat_r <- r %*% M_mat
 
 ```
 
 
 ```{r}
+
 ggplot() +
   geom_hline(yintercept = 0, col = "grey60") +
   geom_vline(xintercept = 0, col = "grey60") +
@@ -384,25 +397,49 @@ ggplot() +
   scale_y_continuous("y", limits = c(-0.5, 0.5)) +
   coord_fixed(ratio = 1) +
   geom_segment(
-    aes(x = 0, y = 0, xend = ek_x, yend = ek_y),
+    aes(x = 0, y = 0, xend = M_mat[1,], yend = M_mat[2, ], col = "M"),
     arrow = arrow(length = unit(0.3, "cm"), type = "closed")
   ) +
   geom_segment(
-    aes(x = 0, y = 0, xend = M_x, yend = M_y), 
+    aes(x = 0, y = 0, xend = M_mat_r[1,], yend = M_mat_r[2,], col = "M_rotated"), 
     arrow = arrow(length = unit(0.3, "cm"), type = "closed")
   ) +
- # annotate("text", x = 0.25, y = 0.06, label = "30\u00B0") +
   theme(
-    legend.title = element_blank(),
     legend.position = "inside",
-    legend.position.inside = c(0.85, 0.9)
+    legend.position.inside = c(0.8, 0.9)
   )
+
 ```
 
-### From Total Wind
+
+:::{.callout-note collapse="false"}
+
+We have been talking about several different angles. All directions are from the vertical and reported in degrees (they are converted to radians in the code). Recall:
+
+$\theta$ = wind direction  
+
+$\beta$ = Ekman flow direction (before being resolved into x and y components)
+
+$\alpha$ = the angle of the coast **this one might be from horizontal**
+:::
+
+# From Total Wind
 
 This is not the same as M for some reason
 
 ```{r}
-M_2 = (1.28 * 0.0015 * 5^2) / (1026 * coriolis(45))
+
+alpha <- 60
+theta <- 240
+
+M_check = (1.28 * 0.0015 * 5^2) / (1026 * coriolis(45))
+
+M_check * cos((alpha - theta) * pi / 180)
+
+# new Eck length
+sqrt(M_mat_r[1, 1]^2 + M_mat_r[2,1]^2)
+
 ```
+
+
+

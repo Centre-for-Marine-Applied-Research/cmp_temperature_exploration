@@ -1,0 +1,226 @@
+---
+title: "Calculate Bakun's Upwelling Index"
+date: "`r Sys.Date()`"
+author: "Danielle Dempsey"
+format: 
+  html:
+    toc: true
+    toc-depth: 3
+    embed-resources: true
+echo: true
+editor_options: 
+  chunk_output_type: console
+---
+
+
+```{r}
+#| include: false
+
+knitr::opts_chunk$set(fig.width = 8, fig.height = 4)
+
+library(dplyr)
+library(ggplot2)
+library(here)
+library(RColorBrewer)
+library(oce)
+
+source(here("functions/vector_helpers.R"))
+
+theme_set(theme_light())
+```
+
+
+## Example Scenario
+
+The wind is blowing at `r wind_speed_m_s` m/s from 240° along the coast (brown line).
+
+```{r}
+
+deg_to_rad <- pi / 180.
+
+wind_speed_m_s <- 10
+wind_direction_degree <- 240 # so we know there should be upwelling (or maybe 240??)
+alpha_degree <- 60          # NS coast angle
+latitude <- 45
+
+p_water <- 1026 # density of water
+p_air <- 1.28   # density of air
+cd <- 0.0015    # wind drag coefficient
+f <- coriolis(latitude) # coriolis parameter
+```
+
+
+```{r}
+#| echo: false
+
+v_plot_components(
+  wind_direction_degree, wind_speed_m_s, lims = 10, add_coast = TRUE
+) 
+```
+
+
+## Method 1
+
+Calculate Mx and My based on the x and y wind components. 
+
+Rotate using sin and cos equations derived from rotation matrix.
+
+::: {.callout-note collapse="false"}
+Note we use the negative values of the x and y wind components.
+
+This is because a wind direction of 225° is coming **from** the Southwest, blowing **towards** the Northeast. To make the vector math work, we want the components that point in the direction the wind is blowing **to**.
+
+This is the same as using (180° + wind_direction_degree).
+:::
+
+
+```{r}
+# wind speed components
+u_x = -wind_speed_m_s * sin(wind_direction_degree * pi / 180.)
+v_y = -wind_speed_m_s * cos(wind_direction_degree * pi / 180.)
+
+v_plot_components(
+  180 + wind_direction_degree, wind_speed_m_s, lims = 10, add_coast = TRUE
+) 
+
+# wind stress components - might need negatives here
+tau_x = p_air * cd * u_x^2
+tau_y = p_air * cd * v_y^2
+
+v_plot_components(
+  c(0, 90), c(tau_y, tau_x), 
+  lims = 0.15, 
+  add_coast = TRUE, 
+  add_components = FALSE
+) 
+
+# Ekman transport components
+M_x = tau_x / (p_water * f)
+M_y = tau_y / (p_water * f)
+
+v_plot_components(
+  c(0, 90), c(M_y, M_x), 
+  lims = 1.5, 
+  add_coast = TRUE, 
+  add_components = FALSE
+) 
+
+# Might need to use 360 - alpha here
+alpha_rad <- (360-alpha_degree) * deg_to_rad
+
+# rotate Ekman components to perpendicular and parallel to the coast
+M_perp1 <- cos(alpha_rad) * M_x + sin(alpha_rad) * M_y
+M_para1 <- -sin(alpha_rad) * M_x + cos(alpha_rad) * M_y
+
+v_perp <- v_calculate_components(90 + alpha_degree, M_perp1)
+v_para <- v_calculate_components(alpha_degree, M_para1)
+
+v_plot_components(
+  c(0, 90), c(M_y, M_x),
+  lims = 1.5,
+  add_coast = TRUE,
+  add_components = FALSE
+) +
+  geom_segment(
+    aes(
+      x = 0, y = 0, xend = v_perp[,1], yend = v_perp[,2]),
+    arrow = arrow(length = unit(0.3, "cm"), type = "closed")
+  ) #+
+  geom_segment(
+    aes(
+      x = 0, y = 0, xend = v_para[,1], yend = v_para[,2]),
+    arrow = arrow(length = unit(0.3, "cm"), type = "closed")
+  )
+
+M_perp1
+M_para1
+```
+
+`r knitr::knit_exit()`
+
+## Method 2
+
+Calculate Mx and My based on the x and y wind components. 
+
+Rotate based on rotation matrix.
+
+```{r}
+
+r <- function(alpha_rad) {
+  matrix(
+    data = c(cos(alpha_rad), -sin(alpha_rad), sin(alpha_rad), cos(alpha_rad)), 
+    ncol = 2
+  )
+}
+
+M_mat <- matrix(data = c(M_x, M_y), ncol = 1)
+
+M_mat_r <- r(alpha_rad) %*% M_mat
+
+M_perp2 = M_mat_r[1,1]
+M_para2 = M_mat_r[2,1]
+```
+## Method 3
+
+Use function from NOAA [oceanview website](https://oceanview.pfeg.noaa.gov/products/upwelling/bakun).
+
+Needs the Ekman components as inputs.
+
+```{r}
+
+upwell <- function(ektrx, ektry, coast_angle) {
+  
+  pi <- 3.1415927 # don't need this since << pi >> is stored already in R
+  degtorad <- pi/180.
+  
+  alpha <- (360 - coast_angle) * degtorad # this makes the rotation clockwise
+  # instead of counter-clockwise
+  
+  # coefficients for rotation matrix
+  s1 <- cos(alpha)
+  t1 <- sin(alpha)
+  s2 <- -1 * t1
+  t2 <- s1
+  
+  # rotates the eckman transport components to be perpendicular and 
+  # parallel to the coast
+  perp <- (s1 * ektrx) + (t1 * ektry)
+  para <- (s2 * ektrx) + (t2 * ektry)
+  
+  # not sure why this is divided by 10
+  return(perp/10)
+}
+
+
+M_perp3 <- upwell(M_x, M_y, alpha_degree)
+
+M_perp3
+```
+
+## Method 4
+
+Find the perpendicular component of M using the cosine between the coast angle and the wind angle (from Scrosati 2023).
+
+```{r}
+
+M = sqrt(M_x^2 + M_y^2)
+
+M_perp4 <- M * cos((alpha_degree - wind_direction_degree) * deg_to_rad)
+
+```
+
+# Compare
+
+```{r}
+#| echo: false
+
+data.frame(
+  method = c("Method 1", "Method 2", "Method 3", "Method 4"),
+  perp_component = c(M_perp1, M_perp2, M_perp3, M_perp4)
+)
+
+```
+
+
+
+

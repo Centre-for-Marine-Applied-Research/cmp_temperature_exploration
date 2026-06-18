@@ -20,89 +20,127 @@ knitr::opts_chunk$set(fig.width = 8, fig.height = 4)
 
 library(dplyr)
 library(ggplot2)
+library(here)
 library(oce)
 library(RColorBrewer)
 
-source("functions/vector_helpers.R")
-
+source(here("functions/vector_helpers.R"))
 
 theme_set(theme_light())
-
 ```
 
 # Overview
 
-The Bakun Upwelling Index (BUI) is the component of Ekman transport that is  perpendicular to the coast. Positive values indicate upwelling, and negative values indicate downwelling.
+The Bakun Upwelling Index (BUI) is an upwelling index based on Ekman transport, typically expressed in units of $m^3/s$ per 100 m of coastline. Positive values indicate upwelling, and negative values indicate downwelling.
+
+The BUI is calculated from the the component of Ekman transport that is  perpendicular to the coast. If Ekman transport is away from the coast, deep offshore water will flow towards the coast, creating upwelling.
 
 Ekman transport is the net movement of ocean water perpendicular to the wind direction. A combination of wind stress and Coriolis effect cause the water to flow 90° to the right in the Northern Hemisphere (and 90° to the left in the Southern Hemisphere).
 
-Following Scrosati and Ellrich, 2023 (and references therein), Ekman transport is calculated as :
+Ekman transport is calculated as (e.g., Scrosati and Ellrich, 2023 and references therein):
 
-$M = \tau / (\rho_{water} * f)$.
+$M = \tau / (\rho_{water} * f)$, where
 
 $\tau$ is the wind stress:
 
-$\tau = \rho_{air} * C_D * U^2$,
+$\tau = \rho_{air} * C_D * U^2$.
 
-where:
+$U$ is the wind speed in m/s, and the remaining parameters are physical constants.
 
-$\rho_{air}$ is air density (1.28 kg/m$^3$), $C_D$ is the wind drag coefficient (0.0015), and $U$ is the wind speed in m/s.
+  - $\rho_{air}$: air density (1.28 kg/m$^3$) 
+  - $C_D$: the wind drag coefficient (0.0015)
+  - $\rho_{water}$: sea water density (1026 kg/m$^3$).
+  - $f$: Coriolis parameter, which is dependent on latitude[^1]
 
-$\rho_{water}$ is sea water density (1026 kg/m$^3$).
+[^1]: $f = 2\Omega\sin\phi$, where $\Omega$: Earth's rotation rate (7.292x10$^{-5}s^{-1}$) and $\phi$ is the latitude.
 
-$f$ is the Coriolis parameter, which is dependent on latitude.
+To calculate the BUI, the Ekman flow must be resolved into the along shore and cross-shore components. This can be done in a few different ways. 
 
-# Calculation Example
 
-Let's take a simple example of wind blowing at 5 m/s along the coast of Nova Scotia (from 240°, towards 60°).
+# Calculation Example 1
+
+Let's take a simple example of wind blowing at 10 m/s along the coast of Nova Scotia (from 240°, towards 60°). Assume a latitude of 45°.
+
+Since the wind is blowing directly along the shore, we expect the along shore Ekman transport to be zero, and the cross-shore transport to equal the total transport.
+
+```{r}
+
+deg_to_rad <- pi / 180.
+
+wind_speed_m_s <- 10
+wind_direction_degree <- 240      # so we know there should be upwelling 
+coastline_angle_degree <- 60      # NS coast angle
+latitude <- 45
+
+#p_water <- 1026 # density of water
+#p_air <- 1.28   # density of air
+#cd <- 0.0015    # wind drag coefficient
+p_water <- 1025
+p_air <- 1.22
+cd <- 0.0013
+f <- oce::coriolis(latitude) # coriolis parameter
+```
 
 ```{r}
 v_plot_components(
-  theta_degrees = c(60, 240),
-  v_length = c(5, 5), 
-  add_components = FALSE, 
-  lims = 5, 
-  legend_pos = c(0.2, 0.8)
-) 
+  wind_direction_degree, wind_speed_m_s, lims = 10, add_coast = TRUE
+)  
 ```
+
+
+In the first example, we will: 
+
+1. Resolve the u and v (x and y) components of the wind vector.
+2. Calculate the corresponding components of $\tau$.
+3. Calculate the corresponding components of $M$.
+4. Rotate the components of $M$ to be parallel (alongshore) and perpendicular (cross-shore) to the coast.
 
 ## 1. Resolve Wind Speed Components
 
 We first calculate the x and y (u and v) components of the wind. Recall:
 
-$ux = (wind\ speed) * sin(theta)$
-$vy = (wind\ speed) * cos(theta)$
+$ux = -(wind\ speed) * sin(theta)$
+$vy = -(wind\ speed) * cos(theta)$
 
 Where theta is the wind direction in radians, relative to the North.
+
+::: {.callout-note collapse="false"}
+### Wind Components
+
+Note we use the negative values of the x and y wind components.
+
+This is because a wind direction of 240° is coming **from** the Southwest, blowing **towards** the Northeast. To make the vector math work, we want the components that point in the direction the wind is blowing **to**.
+
+This is the same as using (wind_direction_degree - 180°).
+:::
 
 ```{r}
 #| echo: true
 
-# wind components relative to x and y --> these were negative in the 
-# original code. Probably depends on which vector you use (blowing to or blowing from)
-ux = 5 * sin(240 * pi / 180.)
-vy = 5 * cos(240 * pi / 180.)
+u_x = -wind_speed_m_s * sin(wind_direction_degree * deg_to_rad)
+v_y = -wind_speed_m_s * cos(wind_direction_degree * deg_to_rad)
 
-ux
-vy
+u_x
+v_y
 ```
 
 ```{r}
 v_plot_components(
-  theta_degrees = 240, v_length = 5, pal = "#D95F02", lims = 5
+  wind_direction_degree - 180, v_length = wind_speed_m_s, 
+  lims = 10, add_coast = TRUE
 ) 
-
 ```
 
 ## 2. Calculate Wind Stress
 
-*I think this was missing in original code*
+Wind stress components are calculated using quadratic drag law: 
 
-Recall 
+$\tau_x = \rho_{air} * C_D * U * u$
 
-$\tau_x = \rho_{air} * C_D * u_x^2$
+$\tau_y = \rho_{air} * C_D * U * v$
 
-$\tau_y = \rho_{air} * C_D * v_y^2$
+$u$ is the component of wind speed in the x direction.
+$v$ is the component of wind speed in the y direction.
 
 ::: {.callout-tip collapse="false"}
 ### Pause to think about units:
@@ -114,8 +152,8 @@ Pascals (Pa) is the SI unit for pressure and stress, so this makes sense!
 ```{r}
 #| echo: true
 
-tau_x = 1.28 * 0.0015 * ux^2
-tau_y = 1.28 * 0.0015 * vy^2
+tau_x = p_air * cd * wind_speed_m_s * u_x
+tau_y = p_air * cd * wind_speed_m_s * v_y
 
 tau_x
 tau_y
@@ -124,18 +162,25 @@ tau_y
 
 ## 3. Ekman Transport
 
-Next, we calculate the Ekman transport in in the x and y (u and v) directions. Assume a latitude of 45°. 
+Next, we calculate the Ekman transport in in the x and y (u and v) directions. 
 
 Recall:
 
-$M_x = \tau_x / (\rho_{water} * f)$
+$M_x = \tau_y / (\rho_{water} * f)$
 
-$M_y = \tau_y / (\rho_{water} * f)$
+$M_y = -\tau_x / (\rho_{water} * f)$
 
-We can use `oce::coriolis()` to calculate $f$ at the latitude of interest.
+::: {.callout-note collapse="false"}
+## Ekman Equations
+
+Ekman transport moves water perpendicular to the wind stress - this is why $M_x$ is related to $tau_y$ (and $M_y$ is related to $tau_x$.
+
+In the Northern Hemisphere, the water is moved to the right because of the Coriolis force. This results in the minus sign in $M_y$.
+:::
+
 
 ::: {.callout-tip collapse="false"}
-Pause to think about units:
+## Pause to think about units:
 $kg/(m * s^2) / (kg/m^3 * s^-1) = kg/(m * s^2) * (m^3*s)/kg = m^2/s$
 
 *Not sure if this makes sense. Scrosati has units of m3/s. Might need to multiply by a coast length to get volume*
@@ -144,46 +189,19 @@ $kg/(m * s^2) / (kg/m^3 * s^-1) = kg/(m * s^2) * (m^3*s)/kg = m^2/s$
 ```{r}
 #| echo: true
 
-M_x = tau_x / (1026 * coriolis(45))
-M_y = tau_y / (1026 * coriolis(45))
+M_x = tau_y / (p_water * f)
+M_y = -tau_x / (p_water * f)
 
 M_x
 M_y
 ```
 
-Overall Ekman transport:
-
-$M = sqrt(M_x^2 + M_y^2)$
-
-Ekman transport direction:
-
-$\beta = atan2(M_x, M_y)$
-
-```{r}
-#| echo: true
-M = sqrt(M_x^2 + M_y^2)
-
-beta <- round(atan2(M_x, M_y) * 180/pi, digits = 2)
-beta <- (360 + beta) %% 360 # maps from (-180 to 180) to (0, 359)
-
-M
-beta
-```
-
--- this doesn't seem right. Shouldn't it be perpendicular to the wind? So 330 degrees (or 150 degrees)
 
 
-```{r}
-#| message: false
 
-v_plot_components(beta, M, lims = 0.5) 
-```
+## 4. Alongshore and Cross-Shore
 
-## 4. Bakun's Index
-
-We found Ekman transport in the x and y (u and v directions), and the overall Ekman transport and direction relative to the vertical.
-
-For the BUI, we are interested in the Ekman transport **perpendicular to the coast**.
+We found Ekman transport in the x and y (u and v directions). For the BUI, we are interested in the **cross-shore** Ekman transport (perpendicular to the coast).
 
 We can use the rotation matrix to rotate $M_x$ and $M_y$ so that $M_x$ is parallel to the coast, which means $M_y$ will be perpendicular to the coast.
 
@@ -264,7 +282,9 @@ x_new
 y_new
 
 # using matrix multiplication (make sure to use the %*% operator):
-r <- matrix(data = c(cos(alpha), sin(alpha), -sin(alpha), cos(alpha)), ncol = 2)
+r <- matrix(
+  data = c(cos(alpha), sin(alpha), -sin(alpha), cos(alpha)), ncol = 2
+)
 
 p_r <- r %*% p
 
@@ -292,6 +312,84 @@ ggplot() +
     legend.position.inside = c(0.8, 0.1)
   )
 ```
+
+
+Now let's rotate -45° from the horizontal. 
+
+```{r}
+#| echo: true
+
+alpha <- -45 * pi / 180
+
+r <- matrix(
+  data = c(cos(alpha), sin(alpha), -sin(alpha), cos(alpha)), ncol = 2
+)
+
+p_r <- r %*% p
+
+p_r
+```
+
+```{r}
+
+ggplot() +
+  geom_hline(yintercept = 0, col = "grey60") +
+  geom_vline(xintercept = 0, col = "grey60") +
+  scale_x_continuous("x", limits = c(-1.1, 1.1)) +
+  scale_y_continuous("y", limits = c(-1.1, 1.1)) +
+  coord_fixed(ratio = 1) +
+  geom_segment(
+    aes(x = 0, y = 0, xend = p[1,], yend = p[2, ], col = "p"),
+    arrow = arrow(length = unit(0.3, "cm"), type = "closed")
+  ) +
+  geom_segment(
+    aes(x = 0, y = 0, xend = p_r[1,], yend = p_r[2,], col = "p_rotated"), 
+    arrow = arrow(length = unit(0.3, "cm"), type = "closed")
+  ) +
+  theme(
+    legend.position = "inside",
+    legend.position.inside = c(0.2, 0.2)
+  )
+```
+
+This should be the same as rotating 360° - 45° = 315°. 
+
+```{r}
+#| echo: true
+
+alpha <- 315 * pi / 180
+
+r <- matrix(
+  data = c(cos(alpha), sin(alpha), -sin(alpha), cos(alpha)), ncol = 2
+)
+
+p_r <- r %*% p
+
+p_r
+```
+
+```{r}
+
+ggplot() +
+  geom_hline(yintercept = 0, col = "grey60") +
+  geom_vline(xintercept = 0, col = "grey60") +
+  scale_x_continuous("x", limits = c(-1.1, 1.1)) +
+  scale_y_continuous("y", limits = c(-1.1, 1.1)) +
+  coord_fixed(ratio = 1) +
+  geom_segment(
+    aes(x = 0, y = 0, xend = p[1,], yend = p[2, ], col = "p"),
+    arrow = arrow(length = unit(0.3, "cm"), type = "closed")
+  ) +
+  geom_segment(
+    aes(x = 0, y = 0, xend = p_r[1,], yend = p_r[2,], col = "p_rotated"), 
+    arrow = arrow(length = unit(0.3, "cm"), type = "closed")
+  ) +
+  theme(
+    legend.position = "inside",
+    legend.position.inside = c(0.2, 0.2)
+  )
+```
+
 :::
 
 ## 4. Bakun's Index
@@ -361,6 +459,27 @@ $\alpha$ = the angle of the coast **this one might be from horizontal**
 
 # From Total Wind
 
+Overall Ekman transport:
+
+$M = sqrt(M_x^2 + M_y^2)$
+
+Ekman transport direction:
+
+$\beta = atan2(M_x, M_y)$
+
+```{r}
+#| echo: true
+M = sqrt(M_x^2 + M_y^2)
+
+beta <- round(atan2(M_x, M_y) * 180/pi, digits = 2)
+beta <- (360 + beta) %% 360 # maps from (-180 to 180) to (0, 359)
+
+M
+beta
+```
+
+
+
 This is not the same as M for some reason
 
 ```{r}
@@ -375,6 +494,12 @@ M_check * cos((alpha - theta) * pi / 180)
 # new Eck length
 sqrt(M_mat_r[1, 1]^2 + M_mat_r[2,1]^2)
 
+```
+
+```{r}
+#| message: false
+
+v_plot_components(beta, M, lims = 2) 
 ```
 
 

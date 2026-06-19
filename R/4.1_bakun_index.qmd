@@ -57,7 +57,7 @@ $U$ is the wind speed in m/s, and the remaining parameters are physical constant
 To calculate the BUI, the Ekman flow must be resolved into the along shore and cross-shore components. This can be done in a few different ways. 
 
 
-# Calculation Example 1
+# Example
 
 Let's take a simple example of wind blowing at 10 m/s along the coast of Nova Scotia (from 240°, towards 60°). Assume a latitude of 45°.
 
@@ -82,11 +82,13 @@ f <- oce::coriolis(latitude) # coriolis parameter
 ```
 
 ```{r}
-v_plot_components(
-  wind_direction_degree, wind_speed_m_s, lims = 10, add_coast = TRUE
-)  
+U_wind <- v_calculate_components(wind_direction_degree, wind_speed_m_s)
+U_wind$labels <- "Wind Speed &\nDirection"
+
+v_plot_components(U_wind, lims = 10, pal = "#7570B3")
 ```
 
+## Method 1
 
 In the first example, we will: 
 
@@ -95,19 +97,20 @@ In the first example, we will:
 3. Calculate the corresponding components of $M$.
 4. Rotate the components of $M$ to be parallel (alongshore) and perpendicular (cross-shore) to the coast.
 
-## 1. Resolve Wind Speed Components
+### 1. Resolve Wind Speed Components
 
-We first calculate the x and y (u and v) components of the wind. Recall:
+We first calculate the u and v (x and y) components of the wind. Recall:
 
-$ux = -(wind\ speed) * sin(theta)$
-$vy = -(wind\ speed) * cos(theta)$
+$u = -(wind\ speed) * sin(theta)$
+
+$v = -(wind\ speed) * cos(theta)$
 
 Where theta is the wind direction in radians, relative to the North.
 
 ::: {.callout-note collapse="false"}
 ### Wind Components
 
-Note we use the negative values of the x and y wind components.
+Note we use the negative values of the u and v wind components.
 
 This is because a wind direction of 240° is coming **from** the Southwest, blowing **towards** the Northeast. To make the vector math work, we want the components that point in the direction the wind is blowing **to**.
 
@@ -117,21 +120,26 @@ This is the same as using (wind_direction_degree - 180°).
 ```{r}
 #| echo: true
 
-u_x = -wind_speed_m_s * sin(wind_direction_degree * deg_to_rad)
-v_y = -wind_speed_m_s * cos(wind_direction_degree * deg_to_rad)
+u = -wind_speed_m_s * sin(wind_direction_degree * deg_to_rad)
+v = -wind_speed_m_s * cos(wind_direction_degree * deg_to_rad)
 
-u_x
-v_y
+u
+v
 ```
 
 ```{r}
-v_plot_components(
-  wind_direction_degree - 180, v_length = wind_speed_m_s, 
-  lims = 10, add_coast = TRUE
-) 
+v_wind <- v_calculate_components(wind_direction_degree, wind_speed_m_s)
+
+wind_components <- data.frame(
+  x = c(u, 0, u),
+  y = c(0, v, v),
+  labels = c("u", "v", "Wind")
+)
+
+v_plot_components(wind_components, lims = 10)
 ```
 
-## 2. Calculate Wind Stress
+### 2. Calculate Wind Stress
 
 Wind stress components are calculated using quadratic drag law: 
 
@@ -140,6 +148,7 @@ $\tau_x = \rho_{air} * C_D * U * u$
 $\tau_y = \rho_{air} * C_D * U * v$
 
 $u$ is the component of wind speed in the x direction.
+
 $v$ is the component of wind speed in the y direction.
 
 ::: {.callout-tip collapse="false"}
@@ -152,15 +161,25 @@ Pascals (Pa) is the SI unit for pressure and stress, so this makes sense!
 ```{r}
 #| echo: true
 
-tau_x = p_air * cd * wind_speed_m_s * u_x
-tau_y = p_air * cd * wind_speed_m_s * v_y
+tau_x = p_air * cd * wind_speed_m_s * u
+tau_y = p_air * cd * wind_speed_m_s * v
 
 tau_x
 tau_y
 ```
 
+```{r}
+tau_components <- data.frame(
+  x = c(tau_x, 0), 
+  y = c(0, tau_y), 
+  labels = c("tau_x", "tau_y")
+)
 
-## 3. Ekman Transport
+v_plot_components(tau_components, lims = 0.2)
+```
+
+
+### 3. Ekman Transport
 
 Next, we calculate the Ekman transport in in the x and y (u and v) directions. 
 
@@ -171,7 +190,7 @@ $M_x = \tau_y / (\rho_{water} * f)$
 $M_y = -\tau_x / (\rho_{water} * f)$
 
 ::: {.callout-note collapse="false"}
-## Ekman Equations
+### Ekman Equations
 
 Ekman transport moves water perpendicular to the wind stress - this is why $M_x$ is related to $tau_y$ (and $M_y$ is related to $tau_x$.
 
@@ -180,7 +199,7 @@ In the Northern Hemisphere, the water is moved to the right because of the Corio
 
 
 ::: {.callout-tip collapse="false"}
-## Pause to think about units:
+### Pause to think about units:
 $kg/(m * s^2) / (kg/m^3 * s^-1) = kg/(m * s^2) * (m^3*s)/kg = m^2/s$
 
 *Not sure if this makes sense. Scrosati has units of m3/s. Might need to multiply by a coast length to get volume*
@@ -196,10 +215,18 @@ M_x
 M_y
 ```
 
+```{r}
+M_components <- data.frame(
+  x = c(M_x, 0, M_x), 
+  y = c(0, M_y, M_y), 
+  labels = c("Mx", "My", "M")
+)
+
+v_plot_components(M_components, lims = 1.5)
+```
 
 
-
-## 4. Alongshore and Cross-Shore
+### 4. Alongshore and Cross-Shore
 
 We found Ekman transport in the x and y (u and v directions). For the BUI, we are interested in the **cross-shore** Ekman transport (perpendicular to the coast).
 
@@ -208,7 +235,7 @@ We can use the rotation matrix to rotate $M_x$ and $M_y$ so that $M_x$ is parall
 ::: {.callout-note collapse="false"}
 ### Linear Algebra Review: The rotation matrix
 
-Consider a point $[x, y]$. If the point is rotated $\theta$ degrees, the new coordinates are given by:
+Consider a point $[x, y]$. If the point is rotated $\theta$ degrees, the new coordinates $[x', y']$ are given by:
 
 ```{=tex}
 \begin{bmatrix} x' \\ y' \end{bmatrix} = \begin{bmatrix} cos(\theta) & -sin(\theta) \\ sin(\theta) & cos(\theta) \end{bmatrix} \begin{bmatrix} x \\ y \end{bmatrix}
@@ -218,7 +245,7 @@ Positive $\theta$ results in counter-clockwise rotation.
 
 Negative $\theta$ results in clockwise rotation.
 
-Using matrix multiplication,
+Using matrix multiplication:
 
 $x' = cos(\theta)x - sin(\theta)y$
 
@@ -239,26 +266,15 @@ y_new
 ```
 
 ```{r}
-ggplot() +
-  geom_hline(yintercept = 0, col = "grey60") +
-  geom_vline(xintercept = 0, col = "grey60") +
-  scale_x_continuous("x", limits = c(-1.1, 1.1)) +
-  scale_y_continuous("y", limits = c(-1.1, 1.1)) +
-  coord_fixed(ratio = 1) +
-  geom_segment(
-    aes(x = 0, y = 0, xend = x_new, yend = y_new, col = "[0.87, 0.5]"),
-    arrow = arrow(length = unit(0.3, "cm"), type = "closed")
-  ) +
-  geom_segment(
-    aes(x = 0, y = 0, xend = 1, yend = 0, col = "[1, 0]"), 
-    arrow = arrow(length = unit(0.3, "cm"), type = "closed")
-  ) +
-  annotate("text", x = 0.25, y = 0.06, label = "30\u00B0") +
-  theme(
-    legend.title = element_blank(),
-    legend.position = "inside",
-    legend.position.inside = c(0.8, 0.9)
-  ) 
+
+p <- data.frame(
+  x = c(1, x_new), 
+  y = c(0, y_new), 
+  labels = c("p1", "p1'")
+)
+
+v_plot_components(p, lims = 1.5) +
+ annotate("text", x = 0.35, y = 0.06, label = "30\u00B0") 
 ```
 
 Now let's do two points, p1 at $[1, 0]$, and p2 at $[0, 1]$ rotated 45° from the horizontal. 
@@ -266,24 +282,24 @@ Now let's do two points, p1 at $[1, 0]$, and p2 at $[0, 1]$ rotated 45° from th
 ```{r}
 #| echo: true
 
-alpha <- 45 * pi / 180
+theta <- 45 * pi / 180
 
-# check how matrices are created - filles in columns first
+# check how matrices are created - fills in columns first
 x <-  matrix(data = c("A", "B", "C", "D"), nrow = 2)
 x
 
 # matrix of points. First column is p1 and second column is p2
 p <- matrix(data = c(1, 0, 0, 1), nrow = 2)
 
-x_new <- cos(45 * pi / 180) * p[1,] - sin(45 * pi / 180) * p[2,]
-y_new <- sin(45 * pi / 180) * p[1,] + cos(45 * pi / 180) * p[2,]
+x_new <- cos(theta) * p[1,] - sin(theta) * p[2,]
+y_new <- sin(theta) * p[1,] + cos(theta) * p[2,]
 
 x_new
 y_new
 
 # using matrix multiplication (make sure to use the %*% operator):
 r <- matrix(
-  data = c(cos(alpha), sin(alpha), -sin(alpha), cos(alpha)), ncol = 2
+  data = c(cos(theta), sin(theta), -sin(theta), cos(theta)), ncol = 2
 )
 
 p_r <- r %*% p
@@ -292,37 +308,27 @@ p_r
 ```
 
 ```{r}
+r_pal <- c("#157A5C", "#D95F02", "#23D19D", "#FDA35D")
 
-ggplot() +
-  geom_hline(yintercept = 0, col = "grey60") +
-  geom_vline(xintercept = 0, col = "grey60") +
-  scale_x_continuous("x", limits = c(-1.1, 1.1)) +
-  scale_y_continuous("y", limits = c(-1.1, 1.1)) +
-  coord_fixed(ratio = 1) +
-  geom_segment(
-    aes(x = 0, y = 0, xend = p[1,], yend = p[2, ], col = "p"),
-    arrow = arrow(length = unit(0.3, "cm"), type = "closed")
-  ) +
-  geom_segment(
-    aes(x = 0, y = 0, xend = p_r[1,], yend = p_r[2,], col = "p_rotated"), 
-    arrow = arrow(length = unit(0.3, "cm"), type = "closed")
-  ) +
-  theme(
-    legend.position = "inside",
-    legend.position.inside = c(0.8, 0.1)
-  )
+p_comp <- data.frame(
+  x = c(1, 0,  x_new), 
+  y = c(0, 1, y_new), 
+  labels = c("p1", "p2", "p1'", "p2'")
+)
+
+v_plot_components(p_comp, lims = 1.5, pal = r_pal) 
 ```
 
 
-Now let's rotate -45° from the horizontal. 
+Now let's rotate -45° from the horizontal:
 
 ```{r}
 #| echo: true
 
-alpha <- -45 * pi / 180
+theta <- -45 * pi / 180
 
 r <- matrix(
-  data = c(cos(alpha), sin(alpha), -sin(alpha), cos(alpha)), ncol = 2
+  data = c(cos(theta), sin(theta), -sin(theta), cos(theta)), ncol = 2
 )
 
 p_r <- r %*% p
@@ -392,7 +398,8 @@ ggplot() +
 
 :::
 
-## 4. Bakun's Index
+### 4. Alongshore and Cross-Shore
+
 Now we can calculate the components that are perpendicular and parallel to the coast by rotating them by the coastline angle $\alpha$. 
 
 :::{.callout-note collapse="false"}
@@ -408,17 +415,24 @@ $M_{y} = sin(\alpha) * M_x + cos(\alpha) * M_y$
 
 ```{r}
 
-alpha <- -60 * pi / 180
+alpha_rad <- (360 - 60) * pi / 180
+
+M_perp1 <- cos(alpha_rad) * M_x + sin(alpha_rad) * M_y
+M_para1 <- -sin(alpha_rad) * M_x + cos(alpha_rad) * M_y 
+
+M_perp1
+M_para1
+
 
 r <- matrix(
-  data = c(cos(alpha), sin(alpha), -sin(alpha), cos(alpha)), 
+  data = c(cos(alpha_rad), -sin(alpha_rad), sin(alpha_rad), cos(alpha_rad)), 
   ncol = 2
 )
 
 M_mat <- matrix(data = c(M_x, 0, 0, M_y), nrow = 2)
 
 M_mat_r <- r %*% M_mat
-
+M_mat_r
 ```
 
 

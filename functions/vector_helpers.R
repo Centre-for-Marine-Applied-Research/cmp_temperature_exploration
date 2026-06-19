@@ -7,26 +7,30 @@ v_calculate_components <- function(theta_degrees, v_length) {
 
 
 v_plot_components <- function(
-    theta_degrees, 
-    v_length = 1, 
-    add_components = TRUE, 
+    dat = NULL, 
+    x = NULL, 
+    y = NULL,
+    labels = NULL,
     pal = NULL,
     lims = 1,
-    legend_pos = c(0.8, 0.9),
-    add_coast = FALSE,
+    legend_pos = c(0.2, 0.9),
+    add_coast = TRUE,
     alpha_degree = 60 # coastline angle
 ) {
   
-  v <- v_calculate_components(theta_degrees, v_length) %>% 
-    mutate(
-      theta_degrees = ordered(theta_degrees, levels = sort(theta_degrees))
-    )
   
-  if(nrow(v) < 3) {
-    n_theta <- 3
-  } else n_theta <- nrow(v)
+  if(is.null(x)) x <- dat[,1]
+  if(is.null(y)) y <- dat[,2]
+  if(is.null(labels)) labels <- dat[,3]
   
-  if(is.null(pal)) pal <- brewer.pal(n_theta, "Dark2")
+  #browser()
+  
+  if(length(x) < 3) {
+    n_vec <- 3
+  } else n_vec <- length(x)
+  
+  
+  if(is.null(pal)) pal <- brewer.pal(n_vec, "Dark2")
   
   p_v <- ggplot() +
     geom_hline(yintercept = 0, col = "grey60") +
@@ -35,54 +39,29 @@ v_plot_components <- function(
     scale_y_continuous("y", limits = c(-lims, lims)) +
     coord_fixed(ratio = 1)
   
-  
   if(isTRUE(add_coast)) {
+    coast <- v_calculate_components(alpha_degree, 1.15*lims)
+    
     p_v <- p_v +
-      v_add_coast_segment(alpha_degree, lims) 
+      geom_segment(
+        aes(x = -coast[,1], y = -coast[,2], xend = coast[,1], yend = coast[,2]), 
+        col = "#e2d7b0", linewidth = 1.2
+      ) 
   }
-  
+
   p_v <- p_v +
     geom_segment(
-      aes(x = 0, y = 0, xend = v[,1], yend = v[,2], col = v[,3]),
+      aes(x = 0, y = 0, xend = x, yend = y, color = labels),
       arrow = arrow(length = unit(0.3, "cm"), type = "closed")
     ) +
-    scale_colour_manual("theta (degrees)", values = pal) +
+    scale_colour_manual(values = pal) +
     theme(
+      legend.title = element_blank(),
       legend.position = "inside",
       legend.position.inside = legend_pos
     )
   
-  if(isTRUE(add_components)) {
-    
-    p_v <- p_v +
-      # x component
-      geom_segment(
-        aes(x = 0, xend = v[,1], y = v[,2], yend = v[,2]),
-        arrow = arrow(length = unit(0.2, "cm"), type = "closed"),
-        linetype = 2,
-      ) +
-      # y component
-      geom_segment(
-        aes(x = 0, xend = 0, y = 0, yend = v[,2]),
-        arrow = arrow(length = unit(0.2, "cm"), type = "closed"),
-        linetype = 2
-      )
-  }
-  
   p_v
-}
-
-
-
-v_add_coast_segment <- function(alpha_degree, lims) {
-  
-  coast <- v_calculate_components(alpha_degree, 1.15*lims)
-  
-  geom_segment(
-    aes(
-      x = -coast[,1], y = -coast[,2], xend = coast[,1], yend = coast[,2]
-    ), col = "#e2d7b0", linewidth = 1.2
-  ) 
 }
 
 

@@ -13,7 +13,7 @@ v_plot_components <- function(
     labels = NULL,
     pal = NULL,
     lims = 1,
-    legend_pos = c(0.2, 0.9),
+    legend_pos = c(0.2, 0.85),
     add_coast = TRUE,
     alpha_degree = 60 # coastline angle
 ) {

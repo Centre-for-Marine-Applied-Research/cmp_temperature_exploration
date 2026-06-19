@@ -170,13 +170,27 @@ tau_y
 
 ```{r}
 tau_components <- data.frame(
-  x = c(tau_x, 0), 
-  y = c(0, tau_y), 
-  labels = c("tau_x", "tau_y")
+  x = c(tau_x, 0, tau_x), 
+  y = c(0, tau_y, tau_y), 
+  labels = c("tau_x", "tau_y", "tau")
 )
 
 v_plot_components(tau_components, lims = 0.2)
 ```
+
+::: {.callout-tip collapse="false"}
+### $\tau$ Components 
+
+Check that $sqrt(\tau_x^2 + \tau_y^2) = \rho_{air} * C_D * U^2 = \tau$
+
+```{r}
+# magnitude of tau based on the components
+sqrt(tau_x^2 + tau_y^2)
+
+# direct calculation of tau
+p_air * cd * wind_speed_m_s^2
+```
+:::
 
 
 ### 3. Ekman Transport
@@ -222,7 +236,9 @@ M_components <- data.frame(
   labels = c("Mx", "My", "M")
 )
 
-v_plot_components(M_components, lims = 1.5)
+v_plot_components(
+  M_components, lims = 1.5,  pal = c("#7570B3", "#1B9E77", "#D95F02")
+)
 ```
 
 
@@ -273,7 +289,7 @@ p <- data.frame(
   labels = c("p1", "p1'")
 )
 
-v_plot_components(p, lims = 1.5) +
+v_plot_components(p, lims = 1.5, add_coast = FALSE) +
  annotate("text", x = 0.35, y = 0.06, label = "30\u00B0") 
 ```
 
@@ -316,7 +332,7 @@ p_comp <- data.frame(
   labels = c("p1", "p2", "p1'", "p2'")
 )
 
-v_plot_components(p_comp, lims = 1.5, pal = r_pal) 
+v_plot_components(p_comp, lims = 1.5, pal = r_pal, add_coast = FALSE) 
 ```
 
 
@@ -338,89 +354,44 @@ p_r
 
 ```{r}
 
-ggplot() +
-  geom_hline(yintercept = 0, col = "grey60") +
-  geom_vline(xintercept = 0, col = "grey60") +
-  scale_x_continuous("x", limits = c(-1.1, 1.1)) +
-  scale_y_continuous("y", limits = c(-1.1, 1.1)) +
-  coord_fixed(ratio = 1) +
-  geom_segment(
-    aes(x = 0, y = 0, xend = p[1,], yend = p[2, ], col = "p"),
-    arrow = arrow(length = unit(0.3, "cm"), type = "closed")
-  ) +
-  geom_segment(
-    aes(x = 0, y = 0, xend = p_r[1,], yend = p_r[2,], col = "p_rotated"), 
-    arrow = arrow(length = unit(0.3, "cm"), type = "closed")
-  ) +
-  theme(
-    legend.position = "inside",
-    legend.position.inside = c(0.2, 0.2)
-  )
-```
-
-This should be the same as rotating 360° - 45° = 315°. 
-
-```{r}
-#| echo: true
-
-alpha <- 315 * pi / 180
-
-r <- matrix(
-  data = c(cos(alpha), sin(alpha), -sin(alpha), cos(alpha)), ncol = 2
+p_comp <- data.frame(
+  x = c(1, 0,  p_r[1,]), 
+  y = c(0, 1, p_r[,1]), 
+  labels = c("p1", "p2", "p1'", "p2'")
 )
 
-p_r <- r %*% p
-
-p_r
-```
-
-```{r}
-
-ggplot() +
-  geom_hline(yintercept = 0, col = "grey60") +
-  geom_vline(xintercept = 0, col = "grey60") +
-  scale_x_continuous("x", limits = c(-1.1, 1.1)) +
-  scale_y_continuous("y", limits = c(-1.1, 1.1)) +
-  coord_fixed(ratio = 1) +
-  geom_segment(
-    aes(x = 0, y = 0, xend = p[1,], yend = p[2, ], col = "p"),
-    arrow = arrow(length = unit(0.3, "cm"), type = "closed")
-  ) +
-  geom_segment(
-    aes(x = 0, y = 0, xend = p_r[1,], yend = p_r[2,], col = "p_rotated"), 
-    arrow = arrow(length = unit(0.3, "cm"), type = "closed")
-  ) +
-  theme(
-    legend.position = "inside",
-    legend.position.inside = c(0.2, 0.2)
-  )
+v_plot_components(p_comp, lims = 1.5, pal = r_pal, add_coast = FALSE) 
 ```
 
 :::
 
-### 4. Alongshore and Cross-Shore
 
-Now we can calculate the components that are perpendicular and parallel to the coast by rotating them by the coastline angle $\alpha$. 
+Now we can calculate the components that are perpendicular and parallel to the coast by rotating them by the angle $\beta = 360° - \alpha$, where $\alpha$ is the coastline angle. 
 
 :::{.callout-note collapse="false"}
-We want to rotate the vectors clockwise, so we actually use -$\alpha$ or 360° - $\alpha$ in the code.
+### Rotation Angle
 
-**Is this because the coast is on the left??? Or just by convention?**
+The coastline angle $\alpha$ (and the wind direction, $\theta$) is measured **clockwise** from the **North**.
+
+The rotation matrix measures angles **counter-clockwise** from the **positive x-axis**.
+
+We need to use $\beta = 360° - \alpha$ to rotate the coordinate systems so they match.
+
 :::
 
-$M_{x} = cos(\alpha) * M_x - sin(\alpha) * M_y$
+$M_{perp} = cos(\alpha) * M_x - sin(\alpha) * M_y$
 
-$M_{y} = sin(\alpha) * M_x + cos(\alpha) * M_y$
+$M_{para} = sin(\alpha) * M_x + cos(\alpha) * M_y$
 
 
 ```{r}
 
-alpha_rad <- (360 - 60) * pi / 180
+alpha_rad <- (360 - coastline_angle_degree) * deg_to_rad
 
 M_perp1 <- cos(alpha_rad) * M_x + sin(alpha_rad) * M_y
 M_para1 <- -sin(alpha_rad) * M_x + cos(alpha_rad) * M_y 
 
-M_perp1
+M_perp1 
 M_para1
 
 
@@ -429,14 +400,18 @@ r <- matrix(
   ncol = 2
 )
 
-M_mat <- matrix(data = c(M_x, 0, 0, M_y), nrow = 2)
+M_mat <- matrix(data = c(M_x, M_y), nrow = 2)
 
 M_mat_r <- r %*% M_mat
 M_mat_r
+
 ```
 
 
 ```{r}
+
+
+
 
 ggplot() +
   geom_hline(yintercept = 0, col = "grey60") +
@@ -459,17 +434,6 @@ ggplot() +
 
 ```
 
-
-:::{.callout-note collapse="false"}
-
-We have been talking about several different angles. All directions are from the vertical and reported in degrees (they are converted to radians in the code). Recall:
-
-$\theta$ = wind direction  
-
-$\beta$ = Ekman flow direction (before being resolved into x and y components)
-
-$\alpha$ = the angle of the coast **this one might be from horizontal**
-:::
 
 # From Total Wind
 

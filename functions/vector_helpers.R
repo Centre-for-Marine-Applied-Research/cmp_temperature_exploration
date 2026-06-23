@@ -48,19 +48,20 @@ v_plot_components <- function(
         col = "#e2d7b0", linewidth = 1.2
       ) 
   }
-
-  p_v <- p_v +
-    geom_segment(
-      aes(x = 0, y = 0, xend = x, yend = y, color = labels),
-      arrow = arrow(length = unit(0.3, "cm"), type = "closed")
-    ) +
-    scale_colour_manual(values = pal) +
-    theme(
-      legend.title = element_blank(),
-      legend.position = "inside",
-      legend.position.inside = legend_pos
-    )
   
+  if(!is.null(x)) {
+    p_v <- p_v +
+      geom_segment(
+        aes(x = 0, y = 0, xend = x, yend = y, color = labels),
+        arrow = arrow(length = unit(0.3, "cm"), type = "closed")
+      ) +
+      scale_colour_manual(values = pal) +
+      theme(
+        legend.title = element_blank(),
+        legend.position = "inside",
+        legend.position.inside = legend_pos
+      )
+  }
   p_v
 }
 

@@ -62,7 +62,7 @@ To calculate the BUI, we need to calculate the cross-shore component of the Ekma
 
 Let's take a simple example of wind blowing at 10 m/s along the coast of Nova Scotia (from 240°, towards 60°). Assume a latitude of 45°.
 
-Since the wind is blowing directly along the shore, we expect the along shore Ekman transport to be zero, and the cross-shore transport to equal the total transport.
+Since the wind is blowing parallel to the shore, we expect the along-shore Ekman transport to be zero, and the cross-shore transport to equal the total transport.
 
 ```{r}
 
@@ -219,7 +219,7 @@ $M_y = -\tau_x / (\rho_{water} * f)$
 ::: {.callout-note collapse="false"}
 ### Ekman Equations
 
-Ekman transport moves water perpendicular to the wind stress - this is why $M_x$ is related to $tau_y$ and $M_y$ is related to $tau_x$.
+Ekman transport moves water perpendicular to the wind stress. This is why $M_x$ is related to $tau_y$ and $M_y$ is related to $tau_x$.
 
 In the Northern Hemisphere, the water is moved to the right because of the Coriolis force. This results in the vector pointing down, so we need the minus sign in $M_y$.
 :::
@@ -227,9 +227,9 @@ In the Northern Hemisphere, the water is moved to the right because of the Corio
 
 ::: {.callout-tip collapse="false"}
 ### Pause to think about units:
-$kg/(m * s^2) / (kg/m^3 * s^-1) = kg/(m * s^2) * (m^3*s)/kg = m^2/s$
+$kg/(m * s^2) / (kg/m^3 * s^{-1}) = kg/(m * s^2) * (m^3*s)/kg = m^2/s$
 
-Multiply by 100 m to get Bakun's Index, which has units of $m^3/s$ for 100 m of coastline.
+This is an area of water per second. Multiply by 100 m to get volume per 100 m of coastline, the units of Bakun's Index.
 :::
 
 ```{r}
@@ -258,10 +258,10 @@ v_plot_components(
 
 We found Ekman transport in the x and y (u and v directions). For the BUI, we are interested in the **cross-shore** Ekman transport (perpendicular to the coast).
 
-We can use the rotation matrix to rotate $M_x$ and $M_y$ to get the $M_perp$ and $M_{para}$ components.
+We can use the rotation matrix to rotate $M_x$ and $M_y$ to get the $M_{perp}$ and $M_{para}$ components.
 
 ::: {.callout-note collapse="false"}
-### Linear Algebra Review: The rotation matrix
+### Linear Algebra Review: The Rotation Matrix
 
 Consider a point $[x, y]$. If the point is rotated $\theta$ degrees from horizontal, the new coordinates $[x', y']$ are given by[2]:
 
@@ -334,7 +334,7 @@ r <- matrix(data = c(cos(theta), sin(theta), -sin(theta), cos(theta)), ncol = 2)
 r %*% p
 ```
 
-Note that a positive $\theta$ results in counter-clockwise rotation:
+Notice that positive $\theta$ results in counter-clockwise rotation:
 
 ```{r}
 r_pal <- c("#157A5C", "#23D19D","#D95F02", "#FDA35D")
@@ -387,7 +387,7 @@ v_plot_components(
 :::
 
 
-Now we can calculate the components that are perpendicular and parallel to the coast by rotating them by the angle $\beta = 360° - \alpha$, where $\alpha$ is the coastline angle. 
+Now we can calculate the Ekman components that are perpendicular and parallel to the coast by rotating them by the angle $\beta = 360° - \alpha$, where $\alpha$ is the coastline angle. 
 
 :::{.callout-note collapse="false"}
 ### Rotation Angle
@@ -436,7 +436,7 @@ r <- matrix(
 
 M <- matrix(data = c(M_x, M_y), nrow = 2)
 
-M_r <- r %*% M_mat
+M_r <- r %*% M
 ```
 
 
@@ -448,22 +448,20 @@ M_components <- data.frame(
 )
 
 v_plot_components(M_components, lims = 5, add_coast = FALSE) +
-  geom_vline(xintercept = 0,   col = "#e2d7b0", linewidth = 1.2)
+  geom_vline(xintercept = 0, col = "#e2d7b0", linewidth = 1.2)
 ```
 
 *Note that $M_{para}$ = 0, although the figure still shows the arrow head.
 
 
 ::: {.callout-tip collapse="false"}
-### Eckman Check
+### Ekman Check
 
-Check that the magnitude of $M$ is the same when calculated with $M_x$ and $M_y$ as with $M_{perp}$ and $M_para$.
+Check that the magnitude of $M$ is the same when calculated with $M_x$ and $M_y$ as with $M_{perp}$ and $M_{para}$.
 
 The angles will be different since they are measuring from different coordinate systems.
 
 ```{r}
-#| echo: false
-
 # from M_x and M_y
 sqrt(M_x^2 + M_y^2)
 
@@ -471,99 +469,243 @@ sqrt(M_x^2 + M_y^2)
 sqrt(M_perp^2 + M_para^2)
 
 # from M_x and M_y
-gamma <- round(atan2(M_x, M_y) * 180/pi, digits = 2)
-(360 + gamma) %% 360 # maps from (-180 to 180) to (0, 359)
+atan2(M_x, M_y) * 180 / pi
 
 # from M_perp and M_para
-gamma <- round(atan2(M_para, M_perp) * 180/pi, digits = 2)
-(360 + gamma) %% 360 # maps from (-180 to 180) to (0, 359)
-
+atan2(M_para, M_perp) * 180 / pi
 ```
 :::
-
 
 
 ## Method 2
 
-In the first example, we will: 
+This Method is conceptually easier to follow because we don't need to rotate the coordinate system.
 
-1. Resolve the u and v (x and y) components of the wind vector.
-2. Calculate the corresponding components of $\tau$.
-3. Calculate the corresponding components of $M$.
-4. Rotate the components of $M$ to be parallel (alongshore) and perpendicular (cross-shore) to the coast.
+In this example, we will: 
 
-## 1. Calculate Wind Stress
+1. Calculate $\tau$.
+2. Calculate $M$.
+4. Find the cross-shore projection of $M$ (perpendicular to the coast).
 
-Recall $\tau = \rho_{air} * C_D * U^2$.
+### 1. Calculate Wind Stress
+
+$\tau = \rho_{air} * C_D * U^2$.
 
 ```{r}
 #| echo: true
 
-tau2 = p_air * cd * wind_speed_m_s^2
+tau = p_air * cd * wind_speed_m_s^2
 
-tau2
+tau
 ```
 
-## 2. Calculate Eckman Transport
+### 2. Calculate Ekman Transport
 
-Recall $M = \tau / (\rho_{water} * f)$.
-
+$M = \tau / (\rho_{water} * f)$.
 
 ```{r}
-M2 = tau2 / (p_water * f)
+#| echo: true
+M = tau / (p_water * f)
+
+M
 ```
 
+::: {.callout-tip collapse="false"}
+### $M$ Check
+
+Check that $sqrt(M_x^2 + M_y^2)$ from Example 1 equals $M$.
+
+```{r}
+#| echo: true
+
+# magnitude of M based on the components
+sqrt(M_x^2 + M_y^2)
+
+# M
+M
+```
+:::
 
 
-## 3. Calculate Cross-Shore Component
+### 3. Calculate Cross-Shore Component
 
-$M_{perp} = M * cos(\alpha - \theta)$  
+For the BUI, we are interested in the **cross-shore** component of Ekman transport.
+
+To get this, we can project the vector $M$ onto the vector perpendicular to the coast.
+
+$M_{perp} = M * cos(\phi)$  
 
 where
 
+$\phi = \alpha - \theta$
+
+and
+
   - $\alpha$: coastline angle
-  - $\theta$: wind direction angle 
+  - $\theta$: direction wind is blowing to ((wind_direction_degree - 180°) * pi / 180)
 
 Both angles are measured from the North in radians.
+
+
+For an example where the coastline angle is 60 and the wind direction is 265° (blowing to 85°), $\phi$ = 25°:
+```{r}
+
+U_wind <- v_calculate_components(85, wind_speed_m_s)
+U_wind$labels <- "Wind Speed &\nDirection"
+
+v_plot_components(U_wind, lims = 10, pal = "#7570B3") +
+  annotate("text", x = 1.25, y = 2, label = "60\u00B0", col = "#594D21") +
+  geom_arc(
+    aes(x0 = 0, y0 = 0, r = 4,  
+        start = 0, end = coastline_angle_degree * deg_to_rad), 
+    col = "#594D21",
+  ) +
+  annotate("text", x = 2.7, y = 3.9, label = "85\u00B0", col = "#7570B3") +
+  geom_arc(
+    aes(x0 = 0, y0 = 0, r = 5.5, 
+        start = 0, end = 85 * deg_to_rad), col = "#7570B3") + 
+  annotate("text", x = 2.3, y = 0.8, label = "\u03D5", col = "#23D19D", size = 5) +
+  geom_arc(
+    aes(x0 = 0, y0 = 0, r = 3.5, 
+        start = coastline_angle_degree * deg_to_rad, 
+        end = 85 * deg_to_rad), 
+    col = "#23D19D", linewidth = 1)
+
+```
+
 
 ::: {.callout-note collapse="false"}
 ### Linear Algebra Review: Vector Projection
 
+To project the magnitude of vector A onto vector B:
+
+$A_B = A * cos(\phi)$
+
+where   
+
+  - $A$ is the magnitude of the vector
+  - $\phi$ is the angle between $A$ and $B$
+
+```{r}
+v_a <- v_calculate_components(30, 1)
+v_proj <- sqrt(v_a$v_x^2 + v_a$v_y^2) * cos(60 * deg_to_rad)
+
+dat <- data.frame(
+  x = c(v_a$v_x, 1, v_proj),
+  y = c(v_a$v_y, 0, 0),
+  labels = c("A", "B", "A_B")
+)
+
+v_plot_components(dat, add_coast = FALSE) +
+  annotate("text", x = 0.14, y = 0.09, label = "60\u00B0") +
+  geom_arc(aes(x0 = 0, y0 = 0, r = 0.25, 
+               start = 30 * deg_to_rad,
+               end = 90 * deg_to_rad),
+  )
+```
 
 
-```{=tex}
-\begin{bmatrix} x' \\ y' \end{bmatrix} = \begin{bmatrix} cos(\theta) & -sin(\theta) \\ sin(\theta) & cos(\theta) \end{bmatrix} \begin{bmatrix} x \\ y \end{bmatrix}
+In this example, A has a magnitude of 1 and A and B are separated by 60°. 
+
+The magnitude of A in the direction of B is:
+
+```{r}
+#| echo: true
+1 * cos(60 * pi / 180)
 ```
 :::
 
-::: {.callout-note collapse="false"}
-### Wind Direction
+::: {.callout-tip collapse="false"}
+### Pause to Review Geometry
 
-As above, wind direction is typically recorded as the direction the wind is blowing **from**. We are interested in the direction the wind is blowing **to**. 
+Remember that Ekman transport is 90° to the right of the wind direction, and cross-shore is 90° to the right of the coastline angle. Using $cos(\phi)$ gives the alongshore component of wind, but the **cross-shore** component of Ekman flow.
 
-Therefore, $\theta$ = (wind_direction_degree - 180°) * pi / 180.
-:::
-
-
-
-
+This is easier to see for an example where the wind is not blowing directly parallel to shore:
 
 ```{r}
 
-U_wind <- v_calculate_components(80, wind_speed_m_s)
-U_wind$labels <- "Wind Speed &\nDirection"
+cross_shore <- v_calculate_components(coastline_angle_degree + 90, 10)
+eck <- v_calculate_components(85 + 90, wind_speed_m_s)
 
-v_plot_components(U_wind, lims = 10, pal = "#7570B3")# +
-  annotate("text", x = 1, y = 1.5, label = "60\u00B0", col = "#594D21") +
-  geom_arc(aes(x0 = 0, y0 = 0, r = 2.75, start = 0, 
-               end = coastline_angle_degree * deg_to_rad), col = "#594D21",
+ex <- data.frame(
+  x = c(U_wind$v_x, eck$v_x),
+  y = c(U_wind$v_y, eck$v_y),
+  labels = c("Wind Direction", "Ekman Flow")
+)
+                 
+v_plot_components(ex, lims = 10) +
+  geom_segment(
+    aes(x = -cross_shore$v_x, y = -cross_shore$v_y, 
+        xend = cross_shore$v_x, yend = cross_shore$v_y), 
+    col = "#e2d7b0", linewidth = 1.2, linetype = 2
   ) +
-  annotate("text", x = 0.25, y = -1.5, label = "240\u00B0", col = "#7570B3") +
-  geom_arc(aes(x0 = 0, y0 = 0, r = 4, start = 0, 
-        end = wind_direction_degree * deg_to_rad), col = "#7570B3",
-  ) 
+  annotate(
+    "text", x = 2.3, y = 0.8, label = "\u03D5", col = "#23D19D", size = 5) +
+  geom_arc(
+    aes(x0 = 0, y0 = 0, r = 3.5, 
+        start = coastline_angle_degree * deg_to_rad, end = 85 * deg_to_rad), 
+    col = "#23D19D", linewidth = 1) +
+  annotate(
+    "text", x = 0.8, y = -2.3, label = "\u03D5", col = "#23D19D", size = 5) +
+  geom_arc(
+    aes(x0 = 0, y0 = 0, r = 3.5, 
+        start = (coastline_angle_degree + 90) * deg_to_rad, 
+        end = (85 + 90) * deg_to_rad), 
+    col = "#23D19D", linewidth = 1)
+```
+
+:::
+
+For our example:
+
+```{r}
+#| echo: true
+
+# offshore component of M
+theta <- wind_direction_degree - 180
+M_perp <- M * cos((coastline_angle_degree - theta) * deg_to_rad)
+
+M_perp
 ```
 
 
+```{r}
+df <- data.frame(
+  x = c(v_calculate_components(theta, wind_speed_m_s)$v_x,
+        v_calculate_components(coastline_angle_degree + 90, M_perp)$v_x),
+  y = c(v_calculate_components(theta, wind_speed_m_s)$v_y,
+        v_calculate_components(coastline_angle_degree + 90, M_perp)$v_y),
+  labels = c("Wind", "M_perp")
+  
+)
+
+v_plot_components(df, lims = 10) +
+  geom_segment(
+    aes(x = -cross_shore$v_x, y = -cross_shore$v_y, 
+        xend = cross_shore$v_x, yend = cross_shore$v_y), 
+    col = "#e2d7b0", linewidth = 1.2, linetype = 2
+  ) 
+```
+
+### 4. Bakun's Index
+
+Bakun's Index is typically expressed per 100 m of coastline.
+
+```{r}
+bui <- M_perp * 100
+```
+
+Positive value means upwelling.
+
+So for this example, there is `r round(bui, digits = 4)` $m^3/s$ of upwelling per 100 m of coastline.
+
+# List of Angles
+
+Keep track of which symbol corresponds to which angle.
+
+  - $\alpha$: coastline angle (clockwise from North).
+  - $\beta = 2\pi - \alpha$: rotation angle used to calculate the cross-shore Ekman component from $M_x$ and $M_y$. 
+  - $\theta$ : direction wind is blowing to ($\pi$ - reported wind direction, clockwise from North) 
+  - $\phi = \alpha - \theta$: difference between the coastline angle and the wind angle, used to calculate $M_{perp}$ from $M$. 
 
 

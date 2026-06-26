@@ -3,7 +3,7 @@ title: "Bakun's Upwelling Index"
 date: "`r Sys.Date()`"
 author: "Danielle Dempsey"
 format: 
-  html:
+  pdf:
     toc: true
     toc-depth: 3
     embed-resources: true
@@ -73,12 +73,12 @@ wind_direction_degree <- 240      # so we know there should be upwelling
 coastline_angle_degree <- 60      # NS coast angle
 latitude <- 45
 
-#p_water <- 1026 # density of water
-#p_air <- 1.28   # density of air
-#cd <- 0.0015    # wind drag coefficient
-p_water <- 1025
-p_air <- 1.22
-cd <- 0.0013
+p_water <- 1026 # density of sea water
+p_air <- 1.28   # density of air
+cd <- 0.0015    # wind drag coefficient
+# p_water <- 1025
+# p_air <- 1.22
+# cd <- 0.0013
 f <- oce::coriolis(latitude) # coriolis parameter
 ```
 
@@ -250,7 +250,7 @@ M_components <- data.frame(
 )
 
 v_plot_components(
-  M_components, lims = 1.5,  pal = c("#7570B3", "#1B9E77", "#D95F02")
+  M_components, lims = 2,  pal = c("#7570B3", "#1B9E77", "#D95F02")
 )
 ```
 
@@ -266,7 +266,7 @@ We can use the rotation matrix to rotate $M_x$ and $M_y$ to get the $M_{perp}$ a
 Consider a point $[x, y]$. If the point is rotated $\theta$ degrees from horizontal, the new coordinates $[x', y']$ are given by[2]:
 
 ```{=tex}
-\begin{bmatrix} x' \\ y' \end{bmatrix} = \begin{bmatrix} cos(\theta) & -sin(\theta) \\ sin(\theta) & cos(\theta) \end{bmatrix} \begin{bmatrix} x \\ y \end{bmatrix}
+$\begin{bmatrix} x' \\ y' \end{bmatrix} = \begin{bmatrix} cos(\theta) & -sin(\theta) \\ sin(\theta) & cos(\theta) \end{bmatrix} \begin{bmatrix} x \\ y \end{bmatrix}$
 ```
 
 Positive $\theta$ results in counter-clockwise rotation.
@@ -462,6 +462,7 @@ Check that the magnitude of $M$ is the same when calculated with $M_x$ and $M_y$
 The angles will be different since they are measuring from different coordinate systems.
 
 ```{r}
+#| echo: true
 # from M_x and M_y
 sqrt(M_x^2 + M_y^2)
 

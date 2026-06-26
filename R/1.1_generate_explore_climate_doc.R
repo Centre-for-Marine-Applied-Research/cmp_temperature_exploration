@@ -3,7 +3,7 @@ library(here)
 # SECTION 1: SET UP ---------------------------------------------
 
 # number of direction binds/ options are 8 and 16
-round_int <- "2 hours"
+round_int <- "24 hours"
 
 # SECTION 2: GENERATE REPORTS --------------------------------------------------------
 

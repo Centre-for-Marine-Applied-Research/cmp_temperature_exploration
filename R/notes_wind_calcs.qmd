@@ -1,0 +1,489 @@
+---
+title: "Vector Averages"
+date: "`r Sys.Date()`"
+author: "Danielle Dempsey"
+format: 
+  html:
+    toc: true
+    toc-depth: 3
+    embed-resources: true
+echo: false
+editor_options: 
+  chunk_output_type: console
+---
+
+
+```{r}
+#| include: false
+
+library(dplyr)
+library(ggplot2)
+#library(plotly)
+library(RColorBrewer)
+
+theme_set(theme_light())
+
+v_calculate_components <- function(theta_degrees, v_length) {
+  
+  v_x <- v_length * sin(theta_degrees * pi / 180)
+  v_y <- v_length * cos(theta_degrees * pi / 180)
+  
+  data.frame(v_x = v_x, v_y = v_y)
+}
+
+
+v_plot_components <- function(
+    theta_degrees, v_length = 1, add_components = TRUE
+) {
+  
+  v <- v_calculate_components(theta_degrees, v_length) %>% 
+    mutate(
+      theta_degrees = ordered(theta_degrees, levels = sort(theta_degrees))
+      )
+  
+  if(nrow(v) < 3) {
+    n_theta <- 3
+  } else n_theta <- nrow(v)
+  
+  
+  p_v <- ggplot() +
+    geom_hline(yintercept = 0, col = "grey60") +
+    geom_vline(xintercept = 0, col = "grey60") +
+    scale_x_continuous("x", limits = c(-1, 1)) +
+    scale_y_continuous("y", limits = c(-1,1)) +
+    coord_fixed(ratio = 1)+ 
+    geom_segment(
+      aes(x = 0, y = 0, xend = v[,1], yend = v[,2], col = v[,3]),
+      arrow = arrow(length = unit(0.3, "cm"), type = "closed")
+    ) +
+    scale_colour_manual("theta (degrees)", values = brewer.pal(n_theta, "Dark2"))
+  
+  if(isTRUE(add_components)) {
+    
+    p_v <- p_v +
+      # x component
+      geom_segment(
+        aes(x = 0, xend = v[,1], y = v[,2], yend = v[,2]),
+        arrow = arrow(length = unit(0.2, "cm"), type = "closed"),
+        linetype = 2,
+      ) +
+      # y component
+      geom_segment(
+        aes(x = 0, xend = 0, y = 0, yend = v[,2]),
+        arrow = arrow(length = unit(0.2, "cm"), type = "closed"),
+        linetype = 2
+      )
+  }
+  
+  p_v
+}
+
+
+dat <- data.frame(theta_degrees = c(20, 340), v_length = c(1, 1))
+
+#dat <- cbind(theta_degrees = c(20, 340), v_length = c(1, 1))
+
+v_calculate_average <- function(theta_degrees, v_length) {
+  
+  v_comp <- v_calculate_components(theta_degrees, v_length) 
+  
+  v_x_mean <- mean(v_comp$v_x)
+  v_y_mean <- mean(v_comp$v_y)
+  
+  theta <- round(atan2(v_x_mean, v_y_mean) * 180/pi, digits = 2)
+  theta <- (360 + theta) %% 360 # maps from (-180 to 180) to (0, 359)
+  
+  l <- sqrt(v_y_mean^2 + v_x_mean^2)
+  
+  data.frame(
+    v_x = v_x_mean,
+    v_y = v_y_mean, 
+    theta_degrees = theta, 
+    v_length = l
+  )
+}
+
+
+# v %>% 
+#   plot_ly(x = ~x_start,
+#           y = ~y_start) %>% 
+#   add_markers() %>% 
+#   add_annotations(text = ~angle_deg,
+#                   showarrow = TRUE,
+#                   xref = "x_start", axref = "x_start",
+#                   yref = "y_start", ayref = "y_start",
+#                   x = ~x_end,
+#                   ax = ~x_start,
+#                   y = ~y_end,
+#                   ay = ~y_start)
+
+```
+
+# Motivation
+
+Consider two vectors, one pointing to 0 degrees and one pointing to 360 degrees.
+
+These vectors both point North. The average should therefore also point North.
+
+```{r}
+#| echo: false
+
+v_plot_components(
+  theta_degrees = c(0, 360), v_length = c(1, 0.5), 
+  add_components = FALSE
+)
+```
+
+Taking a simple average:
+
+```{r}
+#| echo: true
+
+v_north <- c(0, 360)
+
+mean(v_north)
+```
+
+180 degrees points South!
+
+Similarly, consider a vector pointing to 20 degrees and a vector pointing to 340 degrees (-20 degrees).
+
+```{r}
+#| echo: false
+
+v_plot_components(
+  theta_degrees = c(20, 340), v_length = c(1, 1), 
+  add_components = FALSE
+)
+```
+
+Taking a simple average:
+
+```{r}
+#| echo: true
+
+v_north <- c(20, 340)
+
+mean(v_north)
+```
+
+180 degrees points South!
+
+
+We need another way to calculate the average direction.
+
+# Trigonometry Review
+
+## Example 1
+
+Now let's consider a vector of length 1 pointing to the North-East, 45 degrees from vertical.
+
+```{r}
+#| echo: false
+
+v_plot_components(
+  theta_degrees = 45, v_length = 1, add_components = FALSE
+) +
+  annotate("text", x = 0.07, y = 0.15, label = "45\u00B0")
+
+```
+
+This can be broken down into 2 components: one along the x-axis, and one along the y-axis.
+
+```{r}
+
+v_plot_components(theta_degrees = 45, v_length = 1) +
+  annotate("text", x = 0.07, y = 0.15, label = "45\u00B0")
+
+```
+
+This makes a right-angle triangle, with our original vector as the hypotenuse and the angle theta between the y-axis and our vector.
+
+Now we get to use our high school trigonometry: SOH CAH TOA!
+
+### x component
+
+We use the sine to calculate the length of the x component, since it is opposite from the angle theta (SOH).
+
+$v_x = v_{length} * sin(theta)$
+
+This equation assumes theta is in radians.
+
+Recall: $rad = degrees * pi / 180$
+
+```{r}
+#| echo: true
+v_x = 1 * sin(45 * pi / 180)
+
+v_x
+```
+
+### y component
+
+We use the cosine to calculate the length of the y component, since it is adjacent to the angle theta (CAH).
+
+$v_y = v_{length} * cos(theta)$
+
+```{r}
+#| echo: true
+v_y = 1 * cos(45 * pi / 180)
+
+v_y
+```
+
+Note that `v_x` and `v_y` have the same length. This is because theta = 45 degrees.
+
+If you remember your unit circle, you might have also noticed the component lengths correspond to sqrt(2) / 2.
+
+## Example 2
+
+Now let's consider a vector of length 0.75 pointing 20 degrees from vertical.
+
+```{r}
+v_plot_components(theta_degrees = 20, v_length = 0.75) +
+  annotate("text", x = 0.07, y = 0.35, label = "20\u00B0")
+```
+
+
+```{r}
+#| echo: true
+v_x = 0.75 * sin(20 * pi / 180)
+v_x
+
+v_y = 0.75 * cos(20 * pi / 180)
+v_y
+```
+
+## Example 3
+
+This also works for other quadrants. Consider an angle of 170 degrees and length of 1.
+
+```{r}
+v_plot_components(theta_degrees = 170, v_length = 1) 
+```
+
+```{r}
+#| echo: true
+v_x = 1 * sin(170 * pi / 180)
+v_x
+
+v_y = 1 * cos(170 * pi / 180)
+v_y
+```
+
+
+## Example 4
+
+Consider an angle of 230 degrees and length of 0.8.
+
+```{r}
+v_plot_components(theta_degrees = 230, v_length = 0.8) 
+```
+
+```{r}
+#| echo: true
+v_x = 0.8 * sin(230 * pi / 180)
+v_x
+
+v_y = 0.8 * cos(230 * pi / 180)
+v_y
+```
+
+## Example 5
+
+Consider an angle of 325 degrees and length of 0.9.
+
+```{r}
+v_plot_components(theta_degrees = 325, v_length = 0.9) 
+```
+
+```{r}
+#| echo: true
+v_x = 0.9 * sin(325 * pi / 180)
+v_x
+
+v_y = 0.9 * cos(325 * pi / 180)
+v_y
+```
+
+
+# Vector Averages
+
+## Example 1
+
+Let's go back to our example with one vector (v1) pointing to 20 degrees and another vector( v2) pointing to 340 degrees (-20 degrees). Let's break them each into their components.
+
+```{r}
+#| echo: false
+
+v_plot_components(theta_degrees = c(20, 340), v_length = c(1, 1))
+```
+
+The v1 components:
+```{r}
+#| echo: true
+v1_x = 1 * sin(20 * pi / 180)
+v1_x
+
+v1_y = 1 * cos(20 * pi / 180)
+v1_y
+```
+
+The v2 components:
+```{r}
+#| echo: true
+v2_x = 1 * sin(340 * pi / 180)
+v2_x
+
+v2_y = 1 * cos(340 * pi / 180)
+v2_y
+```
+
+Now take the average of the x components and the average of the y components and use these to calculate the new vector.
+
+x component:
+```{r}
+#| echo: true
+v_x <- mean(c(v1_x, v2_x))
+
+v_x
+```
+
+y component:
+```{r}
+#| echo: true
+v_y <- mean(c(v1_y, v2_y))
+
+v_y
+```
+
+New vector angle:
+
+$theta = atan2(v_x, v_y) * 180 / pi$
+
+New vector length (from Pythagorus):
+
+$l = sqrt(v_x^2 - v_y^2)$
+
+```{r}
+theta <- atan2(v_x, v_y) * 180/pi
+theta <- (360 + theta) %% 360 # scales to (0, 360)
+
+l <- sqrt(v_y^2 + v_x^2)
+```
+
+```{r}
+v_plot_components(
+  theta_degrees = c(20, 340, theta), v_length = c(1, 1, l),
+  add_components = FALSE
+)
+```
+
+
+## Example 2
+
+A vector at 0 degrees and a vector at 90 degrees, of equal length. The average vector should be at 45 degrees.
+
+```{r}
+v_avg <- v_calculate_average(
+  theta_degrees = c(0, 90), v_length = c(1, 1)
+)
+
+v_plot_components(
+  theta_degrees = c(0, 90, v_avg$theta_degrees), v_length = c(1, 1, v_avg$v_length),
+  add_components = FALSE
+)
+```
+
+What if one vector is longer than the other?
+
+```{r}
+v_avg <- v_calculate_average(
+  theta_degrees = c(0, 90), v_length = c(1, 0.5)
+)
+
+v_plot_components(
+  theta_degrees = c(0, 90, v_avg$theta_degrees), 
+  v_length = c(1, 0.5, v_avg$v_length),
+  add_components = FALSE
+)
+```
+
+The average vector is "pulled" towards the longer vector.
+
+## Example 3
+
+A vector of length 1 at 340 degrees and a vector of length 0.25 at 190 degrees. The average vector will be weighted by the largest original vector.
+
+```{r}
+v_avg <- v_calculate_average(
+  theta_degrees = c(340, 190), v_length = c(1, 0.25)
+)
+
+v_plot_components(
+  theta_degrees = c(340, 190, v_avg$theta_degrees), 
+  v_length = c(1, 0.25, v_avg$v_length),
+  add_components = FALSE
+)
+```
+
+## Example 4
+
+This also works for more than 2 vectors.
+
+- v1: 45 degrees, length 1
+- v2: 60 degrees, length 1
+- v3: 170 degrees, length 1
+
+```{r}
+
+v_avg <- v_calculate_average(
+  theta_degrees = c(45, 60, 170), v_length = c(1, 1, 1)
+)
+
+v_plot_components(
+  theta_degrees = c(45, 60, 170, v_avg$theta_degrees), 
+  v_length = c(1, 1, 1, v_avg$v_length),
+  add_components = FALSE
+)
+```
+
+Make v1 and v2 half the length of v3:
+
+```{r}
+
+v_avg <- v_calculate_average(
+  theta_degrees = c(45, 60, 170), v_length = c(0.5, 0.5, 1)
+)
+
+v_plot_components(
+  theta_degrees = c(45, 60, 170, v_avg$theta_degrees), 
+  v_length = c(0.5, 0.5, 1, v_avg$v_length),
+  add_components = FALSE
+)
+```
+
+## Example 5
+
+And also vectors from different quadrants
+
+```{r}
+
+v_dat <- data.frame(
+  theta_degrees = c(10, 170, 185, 190, 275),
+  v_length = c(0.25, 0.5, 0.5, 1, 1)
+)
+
+v_avg <- v_calculate_average(v_dat$theta_degrees, v_dat$v_length)
+
+v_plot_components(
+  theta_degrees = c(v_dat$theta_degrees, v_avg$theta_degrees), 
+  v_length = c(v_dat$v_length, v_avg$v_length),
+  add_components = FALSE
+)
+```
+
+
+
+
+

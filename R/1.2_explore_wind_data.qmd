@@ -1,0 +1,315 @@
+---
+title: "Explore Wind Data"
+date: "`r Sys.Date()`"
+author: "Danielle Dempsey"
+format: 
+  html:
+    toc: true
+    toc-depth: 3
+    embed-resources: true
+echo: false
+params:
+  n_dir_bins: n_dir_bins
+editor_options: 
+  chunk_output_type: console
+---
+
+
+```{r}
+#| include: false
+
+library(adcp)
+library(data.table)
+library(dplyr)
+library(forcats)
+library(here)
+#library(htmltools)
+library(leaflet)
+library(lubridate)
+library(plotly)
+library(purrr)
+library(RColorBrewer)
+library(scales)
+library(tidyr)
+library(viridis)
+
+source(here("functions/subchunkify.R"))
+source(here("functions/helpers.R"))
+
+# from west to east
+stations <- c("YARMOUTH RCS", "LUNENBURG", "BEAVER ISLAND (AUT)", "HART ISLAND (AUT)" )
+
+# plot params
+#pal <- brewer.pal(4, "Dark2")
+pal <- viridis(4, option = "F", begin = 0.2, end = 0.8)
+n_speed_bins <- 10
+n_dir_bins <- params$n_dir_bins
+theme_set(theme_light())
+# ensures the Plotly JS dependencies are loaded being called in the loop
+#htmltools::tagList(plot_ly(x = rnorm(10), type = "histogram"))
+
+# read in data
+dat_folders <- list_climate_data_folders()
+
+dat <- map_df(.x = dat_folders, .f = foo) %>% 
+  select(
+    longitude = `Longitude (x)`,
+    latitude = `Latitude (y)`,
+    station = `Station Name`,
+    timestamp_utc = `Date/Time (UTC)`,
+    wind_direction_10_degree = `Wind Dir (10s deg)`,
+    wind_speed_km_per_hour = `Wind Spd (km/h)`
+  ) %>% 
+  mutate(
+    timestamp_utc = if_else(
+      nchar(timestamp_utc) == 16, paste0(timestamp_utc, ":00"), timestamp_utc),
+    timestamp_utc = as_datetime(timestamp_utc),
+    ss_station = case_when(
+      station == "BEAVER ISLAND (AUT)" ~ "Spry Harbour",
+      station == "HART ISLAND (AUT)" ~ "Moose Point & Center Bay",
+      station == "LUNENBURG" ~ "Birchy Head",
+      station == "YARMOUTH RCS" ~ "Wedgeport & Big Pond Point"
+    ),
+    station = ordered(station, levels = stations),
+    wind_direction_degree = wind_direction_10_degree * 10
+  ) %>% 
+  select(-wind_direction_10_degree) %>% 
+  filter(!is.na(wind_direction_degree)) %>% 
+  adcp_label_direction(
+    n_petals = n_dir_bins, column = wind_direction_degree
+  ) %>%
+  adcp_label_speed(
+    column = wind_speed_km_per_hour, n_ints = n_speed_bins,
+    upper_value = 130
+  ) 
+
+```
+
+- Hourly wind data downloaded from [Government of Canada](https://collaboration.cmc.ec.gc.ca/cmc/climate/Get_More_Data_Plus_de_donnees/)
+- More information on the climate data [here](https://www.canada.ca/en/services/environment/weather.html).
+- Data was not averaged for this document.
+
+# Station Locations
+
+```{r}
+#| fig-height: 5
+
+st_locations <- dat %>% 
+  distinct(station, ss_station, latitude, longitude) 
+
+leaflet() %>%
+  addProviderTiles(providers$CartoDB.Positron) %>%
+  addCircleMarkers(
+    data = st_locations,
+    lng = ~longitude,
+    lat = ~latitude, label = ~station,
+    weight = 1, fillOpacity = 0.75, radius = 5
+  ) %>%
+  addScaleBar(
+    position = "bottomleft",
+    options = scaleBarOptions(imperial = FALSE)
+  )
+```
+
+# Time Series
+
+```{r}
+#| fig-height: 6
+
+p <- dat %>%
+  pivot_longer(
+    cols = c(wind_direction_degree, wind_speed_km_per_hour),
+    names_to = "variable", values_to = "value"
+  ) %>%
+  ggplot(aes(timestamp_utc, value, col = fct_rev(station))) +
+  geom_line(linewidth = 0.2) +
+  scale_colour_manual("station", values = pal) +
+  guides(color = guide_legend(override.aes = list(linewidth = 8))) +
+  facet_wrap(~variable, scales = "free_y", ncol = 1) +
+  theme(
+    legend.position = "bottom",
+    legend.title = element_blank(),
+    panel.spacing.y = unit(5, "lines"),
+    strip.background = element_rect(fill = "grey50")
+  )
+
+ggplotly(p)
+```
+
+# Wind Roses
+
+(Not interactive)
+
+```{r}
+#| fig-height: 6
+
+p <- dat %>%
+  group_by(station) %>%
+  mutate(n_station = n()) %>%
+  ungroup() %>%
+  summarise(
+    n = n(),
+    .by = c(wind_direction_degree_labels, wind_speed_km_per_hour_labels,
+            station, n_station)
+  ) %>%
+  mutate(n_prop = n / n_station) %>%
+  adcp_plot_current_rose(
+    speed_col = wind_speed_km_per_hour_labels,
+    direction_col = wind_direction_degree_labels,
+    speed_label = "Wind Speed (km/h)",
+    calculate_prop = FALSE, ncol_legend = 5
+  ) +
+  facet_wrap(~station) +
+  theme(
+    legend.position = "bottom",
+    strip.background = element_rect(fill = "grey50")
+  )
+
+p
+
+```
+
+# Wind Roses by Month
+
+:::panel-tabset
+
+```{r}
+#| results: asis
+#| warning: false
+
+for(i in seq_along(stations)) {
+
+  station_i <- stations[i]
+
+  cat('\n###', station_i, '\n')
+
+  p <- dat %>%
+    filter(
+      station == station_i,
+      !is.na(wind_direction_degree)
+    ) %>%
+    mutate(month_utc = month(timestamp_utc, label = TRUE)) %>%
+    group_by(month_utc) %>%
+    mutate(n_month = n()) %>%
+    ungroup() %>%
+    summarise(
+      n = n(),
+      .by = c(wind_direction_degree_labels,
+              wind_speed_km_per_hour_labels,
+              month_utc, n_month)
+    ) %>%
+    mutate(n_prop = n / n_month) %>%
+    adcp_plot_current_rose(
+      speed_col = wind_speed_km_per_hour_labels,
+      direction_col = wind_direction_degree_labels,
+      speed_label = "Wind Speed (km/h)",
+      calculate_prop = FALSE, ncol_legend = 5
+    ) +
+    facet_wrap(~month_utc, ncol = 4) +
+    theme(
+      text = element_text(size = 8),
+      legend.position = "bottom",
+      strip.background = element_rect(fill = "grey50")
+    )
+
+  subchunkify(p, fig_width = 8)
+
+}
+
+```
+:::
+
+# Observations by Direction
+
+## Percent 
+
+Percent of observations from each direction for each month and station.
+
+```{r}
+#| results: asis
+#| warning: false
+
+if(n_dir_bins == 8) h <- 600
+if(n_dir_bins == 16) h <- 1200
+
+dat_dir <- dat %>% 
+    mutate(month_utc = month(timestamp_utc, label = TRUE)) %>%
+    group_by(station, month_utc) %>%
+    mutate(n_station = n()) %>%
+    ungroup() %>%
+    summarise(
+      n = n(),
+      .by = c(wind_direction_degree_labels, month_utc, station, n_station)
+    ) %>%
+  mutate(
+    n_prop = round(n / n_station, digits = 3),
+    n_percent = 100 * n_prop
+  ) 
+
+p <- ggplot(
+  dat_dir, 
+  aes(month_utc, 
+      n_prop, 
+      col = fct_rev(station), group = station,
+      text = paste0(
+        "month: ", month_utc, "\n",
+        "value: ", n_percent, "%\n",
+        "station: ", station, "\n"
+      ))) + 
+  geom_line() + 
+  scale_y_continuous("Percent of Observations", labels = scales::percent
+  ) +
+  scale_color_manual("station", values = pal) +
+  facet_wrap(~wind_direction_degree_labels, ncol = 2) +
+  theme(
+    legend.position = "bottom",
+    axis.title.x = element_blank(),
+    panel.grid.minor.y = element_blank(),
+    panel.spacing.y = unit(1, "lines"),
+    strip.background = element_rect(fill = "grey50")
+  )
+
+ggplotly(p, height = h, tooltip = "text")
+
+```
+
+
+## Absolute
+
+Number of observations from each direction for each month and station.
+
+```{r}
+#| results: asis
+#| warning: false
+
+dat_dir <- dat %>% 
+  mutate(month_utc = month(timestamp_utc, label = TRUE)) %>%
+  summarise(
+    n = n(),
+    .by = c(wind_direction_degree_labels, month_utc, station)
+  ) 
+
+p <- ggplot(
+  dat_dir, 
+  aes(month_utc, 
+      n, col = fct_rev(station), group = station,
+      text = paste0(
+        "month: ", month_utc, "\n",
+        "value: ", n, "\n",
+        "station: ", station, "\n"
+      ))) + 
+  geom_line() + 
+  scale_y_continuous("Number of Observations") +
+  scale_color_manual("station", values = pal) +
+  facet_wrap(~wind_direction_degree_labels, ncol = 2) +
+  theme(
+    legend.position = "bottom",
+    axis.title.x = element_blank(),
+    panel.grid.minor.y = element_blank(),
+    panel.spacing.y = unit(1, "lines"),
+    strip.background = element_rect(fill = "grey50")
+  )
+
+ggplotly(p, height = h, tooltip = "text")
+```
+

@@ -4,6 +4,8 @@ format:
     toc: true
     toc-depth: 3
     embed-resources: true
+params:
+  round_int: round_int
 echo: false
 dpi: 600
 editor_options: 
@@ -27,15 +29,20 @@ library(stringr)
 library(tidyr)
 
 source(here("functions/subchunkify.R"))
+source(here("functions/helpers.R"))
 
 theme_set(theme_light())
 
-dat <- fread(here("data/climate_data_2_hours.csv"), data.table = FALSE) %>% 
-  pivot_longer(
-    cols = air_temperature:precipitation_mm, 
-    values_to = "value", names_to = "variable"
-  ) %>% 
-  filter(!is.na(value))
+#round_int <- "1 hours"
+round_int <- params$round_int
+
+dat <- fread(
+  here(paste0("data/climate_data_", gsub(" ", "_", round_int),  ".csv")),  
+  data.table = FALSE
+) %>% 
+  filter(
+    !(variable %in% c("coastline_angle", "bui_m3_s"))
+  )
 
 met_locations <- fread(
   here("data/climate_station_locations.csv"), data.table = FALSE
@@ -51,6 +58,8 @@ pal <- get_pal(length(unique(dat$variable)))
 `r Sys.Date()`
 
 - Preliminary exploratory analysis.
+- Observations were recorded hourly.
+- For this document, obervations were averaged over `r round_int`.
 - Data from: [Government of Canada](https://collaboration.cmc.ec.gc.ca/cmc/climate/Get_More_Data_Plus_de_donnees/)
 
 ## Station Locations
@@ -175,22 +184,12 @@ for(i in seq_along(stations)) {
     filter(station == station_i)
   
   p2 <- ggplot(dat_i, aes(timestamp_utc, value, col = variable)) +
-    geom_line(linewidth = 0.75) +
+    geom_line(linewidth = 0.25) +
     scale_color_manual(values = pal) +
     facet_wrap(~variable, scales = "free_y", ncol = 1) +
     theme(legend.position = "none", strip.text = element_text(size = 12))
 
-  # girafe(
-  #   ggobj = p2,
-  #   options = list(
-  #     opts_zoom(max = 10),
-  #     opts_selection(only_shiny = FALSE),
-  #     opts_toolbar(position = "top")
-  #   )
-  # )
-  
-  # subchunkify(p, fig_height = 10, fig_width = 8.5)
-    print(htmltools::tagList(ggplotly(p2, height = 800)))
+    print(htmltools::tagList(ggplotly(p2, height = 900)))
 }
   
 ```

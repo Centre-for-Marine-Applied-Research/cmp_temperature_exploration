@@ -26,14 +26,15 @@ library(tidyr)
 source(here("functions/helpers.R"))
 source(here("functions/calculate_bui.R"))
 
-# import data -------------------------------------------------------------
 
+# climate data ------------------------------------------------------------
+
+# import
 dat_folders <- list_climate_data_folders()
 
-dat <- map_df(.x = dat_folders, .f = fread_data_files)
+dat <- map_df(.x = dat_folders, .f = fread_climate_data_files)
 
-# format ------------------------------------------------------------------
-
+# format 
 met_dat <- dat %>% 
   select(
     longitude = `Longitude (x)`,
@@ -78,7 +79,7 @@ met_dat <- dat %>%
   ) %>% 
   filter(!is.na(value)) 
 
-# average & export ------------------------------------------------------------------
+# average & export
 
 met_dat %>% 
   fwrite(here(paste0("data/climate_data_1_hours.csv")))
@@ -113,57 +114,69 @@ fwrite(
   here(paste0("data/climate_station_locations.csv"))
 )
 
+# tidal observations ------------------------------------------------------
+
+water_level_files <- list.files(
+  here("data-raw/water_level/"), pattern = "_data", full.names = TRUE)
+
+wl_dat <- map_df(water_level_files, fread_water_level_files)
+
+# water level station locations
+water_level_stations <- wl_dat %>% 
+  distinct(station, latitude, longitude) %>% 
+  mutate(station_type = "water_level")
+
+fwrite(
+  water_level_stations,  
+  here(paste0("data/water_level_station_locations.csv"))
+)
 
 
-# # average -----------------------------------------------------------------
+wl_dat_round <- wl_dat %>% 
+  mutate(
+    round_timestamp_utc = round_date(timestamp_utc, unit = "15 minutes")) %>% 
+  summarise(
+    water_level_m = mean(water_level_m), 
+    .by = c(station, round_timestamp_utc)
+  ) %>% 
+  rename(timestamp_utc = round_timestamp_utc) %>% 
+  arrange(station, timestamp_utc)
+
+fwrite(
+  wl_dat_round, 
+  here(paste0("data/water_level_data.csv"))
+)
+
+
+
+
+library(ggplot2)
+ggplot(wl_dat_round, aes(round_timestamp_utc, water_level_m)) +
+  geom_line() + 
+  facet_wrap(~station, ncol = 1)
+
+ 
+# x <- fread(
+#   here("data-raw/water_level/00365_data.csv"),
+#   header = FALSE,
+#   data.table = FALSE
+#   )
 # 
-# scalar_avg <- met_dat %>% 
-#   filter(
-#     !variable %in% c("wind_speed_km_per_hour", "wind_direction_10_degree")
-#   ) %>% 
-#  summarise(
-#     value = mean(value), 
-#     n = n(),
-#     .by = c(station, variable, round_timestamp_utc)
-#   ) 
+# station_i <- x[1, 2]
+# latitude_i <- as.numeric(x[3, 2])
+# longitude_i <- as.numeric(x[4,2])
+# tz_i <- x[5,2]
 # 
-# # wind speed & direction
-# vec_avg <- met_dat %>% 
-#   filter(
-#     variable %in% c("wind_speed_km_per_hour", "wind_direction_10_degree")
-#   ) %>%
-#   pivot_wider(names_from = "variable", values_from = "value") %>% 
+# x2 <- x %>% 
+#   slice(-c(1:7)) %>% 
+#  # rename(timestamp_utc = V1, water_level_m = V2) %>% 
 #   mutate(
-#     wind_from_direction_degree = wind_direction_10_degree * 10,
-#     
-#     v_x = wind_speed_km_per_hour * sin(wind_from_direction_degree * pi / 180),
-#     v_y = wind_speed_km_per_hour * cos(wind_from_direction_degree * pi / 180)
-#   ) %>% 
-#   summarise(
-#     v_x_mean = mean(v_x),
-#     v_y_mean = mean(v_y), 
-#     n = n(),
-#     .by = c(station, round_timestamp_utc)
-#   ) %>% 
-#   mutate(
-#     wind_from_direction_degree = round(
-#       atan2(v_x_mean, v_y_mean) * 180 / pi, digits = 2
-#     ),
-#     # maps from (-180 to 180) to (0, 359)
-#     wind_from_direction_degree = (360 + wind_from_direction_degree) %% 360,
-#     
-#     wind_speed_km_per_hour = round(sqrt(v_y_mean^2 + v_x_mean^2), digits = 2)
-#   ) %>% 
-#   pivot_longer(
-#     cols = c("wind_speed_km_per_hour", "wind_from_direction_degree"),
-#     values_to = "value", names_to = "variable"
-#   ) 
-# 
-# 
-# met_dat_avg <- scalar_avg %>% 
-#   bind_rows(vec_avg) %>% 
-#   rename(timestamp_utc = round_timestamp_utc) %>% 
-#   select(-c(v_x_mean, v_y_mean)) %>% 
-#   arrange(station, timestamp_utc)
-# 
+#     timestamp_utc = parse_date_time(V1, orders = "%Y/%m/%d %h:%M"),
+#    water_level_m = as.numeric(V2) 
+#   )
+
+
+ggplot(x2, aes(timestamp_utc, water_level_m)) +
+  geom_line()
+
 

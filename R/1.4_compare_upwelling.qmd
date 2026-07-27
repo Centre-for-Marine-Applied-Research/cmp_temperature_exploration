@@ -1,0 +1,147 @@
+---
+format: 
+  html:
+    toc: true
+    toc-depth: 3
+    embed-resources: true
+params:
+  round_int: round_int
+echo: false
+dpi: 600
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+#| include: false
+
+library(data.table)
+library(dplyr)
+library(DT)
+library(ggplot2)
+library(here)
+library(htmltools)
+library(leaflet)
+library(lubridate)
+library(plotly)
+library(RColorBrewer)
+library(stringr)
+library(tidyr)
+
+source(here("functions/subchunkify.R"))
+source(here("functions/helpers.R"))
+source(here("functions/calculate_bui.R"))
+
+theme_set(theme_light())
+
+round_int <- "24 hours"
+#round_int <- params$round_int
+
+# from west to east
+stations <- c("YARMOUTH RCS", "LUNENBURG", "BEAVER ISLAND (AUT)", "HART ISLAND (AUT)" )
+
+dat <- fread(
+  here(paste0("data/climate_data_", gsub(" ", "_", round_int),  ".csv")),  
+  data.table = FALSE
+) 
+
+dat_hourly <- dat %>% 
+  filter(variable == "bui_m3_s") %>% 
+  mutate(
+    station = ordered(station, levels = stations),
+    value = round(value, digits = 0)
+    ) %>% 
+  select(station, timestamp_utc, bui_hourly = value)
+
+met_locations <- fread(
+  here("data/climate_station_locations.csv"), data.table = FALSE) 
+ 
+dat_int <- dat %>% 
+  select(-c(u_mean, v_mean, n)) %>% 
+  pivot_wider(values_from = "value", names_from = "variable") %>% 
+  left_join(met_locations) %>% 
+  mutate(
+    coastline_angle_degree = if_else(station == "YARMOUTH RCS", 330, 60),
+    bui_int = calculate_bui(
+      wind_from_direction_degree = wind_from_direction_degree,
+      wind_speed_m_s = wind_speed_m_s,
+      coastline_angle_degree = coastline_angle_degree,
+      latitude_decimal_degree = latitude
+      )
+    ) %>% 
+  select(station, timestamp_utc, bui_int) %>% 
+  filter(!is.na(bui_int))
+
+dat_comp <- dat_hourly %>% 
+  left_join(dat_int, by = join_by(station, timestamp_utc)) %>% 
+  mutate(
+    diff = bui_hourly - bui_int,
+    diff_percent = 100 * abs(diff) / abs(bui_hourly),
+    diff_col = if_else(diff > 0, TRUE, FALSE)
+  )
+
+get_pal <- colorRampPalette(brewer.pal(8, "Set2"))
+pal <- get_pal(length(unique(dat$variable)))
+
+```
+
+# Compare Average BUI Values
+
+`r Sys.Date()`
+
+- average interal: `r round_int`
+- bui_hourly is the bui calculated from hourly wind speeds and then averaged to the interval of interest.
+- bui_int is the bui calculated from averaged wind speed.
+
+## BUI Values 
+
+- bui_hourly - bui_int
+
+```{r}
+p <- dat_comp %>% 
+  pivot_longer(
+    cols = contains("bui"), values_to = "value", names_to = "variable") %>% 
+  ggplot(aes(timestamp_utc, value, col = variable, group = variable)) +
+  geom_line(linewidth = 0.25) +
+  #geom_col(position = "dodge") +
+  geom_hline(yintercept = 0) +
+  facet_wrap(~station, ncol = 1) +
+  theme(strip.background = element_rect(fill = "grey50"),
+        legend.position = "none")
+
+ggplotly(p, height = 750)
+
+```
+
+## Absolute Difference
+
+```{r}
+p <- dat_comp %>% 
+  ggplot(aes(timestamp_utc, diff, col = diff_col)) +
+  geom_line() +
+  geom_hline(yintercept = 0) +
+  facet_wrap(~station, ncol = 1) +
+  theme(
+    strip.background = element_rect(fill = "grey50"),
+    legend.position = "none"
+    )
+
+ggplotly(p, height = 750)
+```
+
+
+## Percent Difference
+
+```{r}
+p <- dat_comp %>% 
+  ggplot(aes(timestamp_utc, diff_percent)) +
+  geom_line() +
+  geom_hline(yintercept = 0) +
+  facet_wrap(~station, ncol = 1) +
+  theme(
+    strip.background = element_rect(fill = "grey50"),
+    legend.position = "none")
+
+ggplotly(p, height = 750)
+```
+

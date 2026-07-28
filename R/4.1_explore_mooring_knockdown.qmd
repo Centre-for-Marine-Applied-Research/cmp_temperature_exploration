@@ -45,6 +45,7 @@ station_depl <- data.frame(
 - Current speed estimates are from the nearest ADCP. Linear current profile is used for all models.
 - In the case where a hobo sensor was attached to the VR2AR sensor, the hobo sensor is not included.
 - The bottom float is not included.
+- Does not account for biofouling.
 - Does not distinguish between VR2AR and VR2AR-X sensors.
 - The rope length from the float to the shallowest sensor is hard-coded at 0.05 m.
 - If the sounding is shallower than the deepest sensor, the sounding is set to

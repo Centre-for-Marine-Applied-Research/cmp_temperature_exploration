@@ -1,0 +1,93 @@
+---
+format: 
+  html:
+    toc: true
+    toc-depth: 3
+    embed-resources: true
+params:
+  round_int: round_int
+echo: false
+dpi: 600
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+#| include: false
+
+library(data.table)
+library(dplyr)
+library(DT)
+library(ggplot2)
+library(here)
+library(htmltools)
+library(leaflet)
+library(lubridate)
+library(plotly)
+library(RColorBrewer)
+library(stringr)
+library(tidyr)
+
+source(here("functions/subchunkify.R"))
+source(here("functions/helpers.R"))
+source(here("functions/calculate_bui.R"))
+
+theme_set(theme_light())
+
+# from west to east
+stations <- c("Yarmouth", "Bedford Institute", "Port Hawkesbury", "North Sydney")
+
+dat <- fread(here("data/water_level_data.csv"), data.table = FALSE)  %>% 
+  mutate(station = ordered(station, levels = stations)) 
+
+wl_locations <- fread(
+  here("data/water_level_station_locations.csv"), data.table = FALSE) 
+ 
+get_pal <- colorRampPalette(brewer.pal(8, "Set2"))
+pal <- get_pal(length(unique(dat$variable)))
+
+```
+
+# Review Water Level
+
+`r Sys.Date()`
+
+- Water level official data downloaded from [Bulk Data Export Tool](https://tides.gc.ca/en/form/data-extraction)
+- Data was recorded every 1 minute and averaged to every 15 minutes for this document.
+
+# Station Locations
+
+```{r}
+#| fig-height: 5
+
+leaflet() %>%
+  addProviderTiles(providers$CartoDB.Positron) %>%
+  addCircleMarkers(
+    data = wl_locations,
+    lng = ~longitude,
+    lat = ~latitude, label = ~station,
+    weight = 1, fillOpacity = 0.75, radius = 5
+  ) %>%
+  addScaleBar(
+    position = "bottomleft",
+    options = scaleBarOptions(imperial = FALSE)
+  )
+```
+
+# Water Level
+
+```{r}
+
+p <- dat %>%
+  ggplot(aes(timestamp_utc, water_level_m)) +
+  geom_line(linewidth = 0.2) +
+  guides(color = guide_legend(override.aes = list(linewidth = 8))) +
+  facet_wrap(~station, scales = "free_y", ncol = 1) +
+  theme(
+    legend.position = "bottom",
+    legend.title = element_blank(),
+    strip.background = element_rect(fill = "grey50")
+  )
+
+ggplotly(p, height = 600)
+```

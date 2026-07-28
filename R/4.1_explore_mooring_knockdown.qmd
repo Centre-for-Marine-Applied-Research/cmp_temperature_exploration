@@ -1,0 +1,116 @@
+---
+format: 
+  html:
+    toc: true
+    toc-depth: 3
+    embed-resources: true
+params:
+  round_int: round_int
+echo: false
+dpi: 600
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+#| include: false
+
+library(dplyr)
+library(here)
+library(mooring)
+library(sensorstrings)
+
+source(here("functions/subchunkify.R"))
+
+station_depl <- data.frame(
+  station = c("Wedgeport",
+              "Big Pond Point",
+              "Center Bay",
+              "Moose Point 1",
+              "Birchy Head",
+              "Spry Harbour"),
+  depl_date = c("2025-07-31", "2024-08-07", "2024-11-07", 
+                "2025-11-20", "2025-12-06", "2024-09-12"),
+  mean_current_m_s = c(0.16, 0.295, 0.061, 0.076, 0.075, 0.04),
+  max_current_m_s = c(0.471, 0.745, 0.398, 0.493, 0.787, 0.24)
+)
+
+```
+
+# Explore Mooring Knockdown
+
+## Assumptions
+
+- Model for one deployment at each station. Other deployment configurations may differ slightly.
+- Current speed estimates are from the nearest ADCP. Linear current profile is used for all models.
+- In the case where a hobo sensor was attached to the VR2AR sensor, the hobo sensor is not included.
+- The bottom float is not included.
+- Does not account for biofouling.
+- Does not distinguish between VR2AR and VR2AR-X sensors.
+- The rope length from the float to the shallowest sensor is hard-coded at 0.05 m.
+- If the sounding is shallower than the deepest sensor, the sounding is set to
+the deepest depth + 2 m.
+  - Moose Point 1 and Center Bay
+
+## Mean Current Speed
+
+```{r}
+#| results: asis
+#| warning: false
+#| fig-height: 5
+
+for (i in 1:nrow(station_depl)) {
+  
+  m_i <- ss_model_mooring(station_depl[i,]$station, station_depl[i, ]$depl_date)
+  
+  m_i <- m_i |> 
+    segmentize(by = 0.5) |>
+    knockdown(u = station_depl[i, ]$mean_current_m_s)
+  
+  # m[[i]] <- m_i
+  
+  cat('\n###', station_depl[i,]$station, '\n')
+  
+  par(mfrow = c(2, 2))
+  # plot(m_i, which = "shape", fancy = TRUE, showDepths = TRUE)
+  plot(m_i, fancy = TRUE, showDepths = TRUE)
+  plot(m_i, which = "knockdown", fancy = TRUE, showDepths = FALSE)
+  plot(m_i, which = "tension", fancy = TRUE, showDepths = FALSE)
+  plot(m_i, which = "velocity", fancy = TRUE)
+  # dev.off()
+  
+  #plot(m_i, fancy = TRUE, showDepths = TRUE)
+   cat('\n')
+}
+
+```
+
+
+## Max Current Speed
+
+```{r}
+#| results: asis
+#| warning: false
+#| fig-height: 5
+
+for (i in 1:nrow(station_depl)) {
+  
+  m_i <- ss_model_mooring(station_depl[i,]$station, station_depl[i, ]$depl_date)
+  
+  m_i <- m_i |> 
+    segmentize(by = 0.5) |>
+    knockdown(u = station_depl[i, ]$max_current_m_s)
+  
+  cat('\n###', station_depl[i,]$station, '\n')
+  
+  par(mfrow = c(2, 2))
+  plot(m_i, fancy = TRUE, showDepths = TRUE)
+  plot(m_i, which = "knockdown", fancy = TRUE, showDepths = FALSE)
+  plot(m_i, which = "tension", fancy = TRUE, showDepths = FALSE)
+  plot(m_i, which = "velocity", fancy = TRUE)
+  
+   cat('\n')
+}
+
+```
+

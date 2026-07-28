@@ -1,0 +1,83 @@
+---
+title: "Explore Tilt Data"
+date: "`r Sys.Date()`"
+format: 
+  html:
+    toc: true
+    toc-depth: 3
+    embed-resources: true
+echo: false
+editor_options: 
+  chunk_output_type: console
+---
+
+
+```{r}
+#| include: false
+
+library(DT)
+library(dplyr)
+library(here)
+library(htmltools)
+library(lubridate)
+library(plotly)
+library(purrr)
+library(sensorstrings)
+library(tidyr)
+library(viridis)
+
+theme_set(theme_light())
+
+dt_options <- list(
+  dom = 'ft',
+  paging = FALSE,
+  searching = TRUE,
+  scrollY = "500px",
+  scrollX = "500px",
+  columnDefs = list(list(className = 'dt-center', targets = "_all"))
+)
+
+stations <- c("Big Pond Point", "Wedgeport", "Birchy Head", "Spry Harbour", "Center Bay", "Moose Point 1")
+
+dat_raw <- list.files(here("data-raw"), pattern = ".rds", full.names = TRUE) %>% 
+  map(readRDS) %>% 
+  list_rbind()
+
+dat <- dat_raw %>%
+  select(-contains("dissolved_oxygen"), -contains("salinity"),
+         -contains("temperature_degree_c")) %>%
+  filter(timestamp_utc >= as_datetime("2020-01-01")) %>% 
+  mutate(station = ordered(station, levels = stations))
+
+```
+
+
+# Time Series
+
+## Fixed Scale
+
+```{r}
+#| results: asis
+#| warning: false
+
+p <- dat %>% 
+  ss_ggplot_variables() + 
+  facet_wrap(~station, ncol = 1)
+
+ggplotly(p, height = 750)
+
+```
+
+## Free Scale
+
+```{r}
+#| results: asis
+#| warning: false
+
+p <- dat %>% 
+  ss_ggplot_variables() +
+  facet_wrap(~station, ncol = 1, scales = "free_y")
+
+ggplotly(p, height = 750)
+
+```

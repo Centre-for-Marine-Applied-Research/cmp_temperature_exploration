@@ -1,0 +1,316 @@
+---
+title: "Seasonal Variations and Hurricane Teddy"
+author: "Ella Headrick"
+date: "`r Sys.Date()`"
+format: 
+  html:
+    toc: true
+    toc-depth: 3
+    embed-resources: true
+echo: false
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+#| include: false
+
+library(DT)
+library(ggplot2)
+library(readr)
+library(data.table)     # export csv file
+library(dplyr)          # wrangling data
+library(here)           # file paths
+library(lubridate)      # dates & times
+library(plotly)         # interactive figures
+library(sensorstrings)  # plot data
+
+library(tidyverse)
+library(ggpubr)
+
+library(patchwork)
+library(hrbrthemes)
+library(scales)
+
+#loading in data sets - CMAR water quality data and ECC climate data (avg at 2 hours and 24 hours)
+climate_data_2_hours <- readRDS(("data/climate_data_2_hours.RDS"))
+avg_temps_2_hours <- readRDS(("data/2.0_averaging_dataset_2_hours.RDS"))
+
+climate_data_24_hours <- readRDS(("data/climate_data_24_hours.RDS"))
+avg_temps_24_hours <- readRDS(("data/2.0_averaging_dataset_24_hours.RDS"))
+
+#joining
+joint_data_2_hours <- full_join(climate_data_2_hours, avg_temps_2_hours)
+joint_data_24_hours <-full_join(climate_data_24_hours, avg_temps_24_hours)
+
+#saving for later
+saveRDS(joint_data_24_hours, file = "data/joint_data_24_hours.rds")
+saveRDS(joint_data_2_hours, file = "data/joint_data_2_hours.rds")
+```
+
+# Looking at the data together - Hurricane Teddy
+
+```{r}
+#reading in data
+joint_data_24_hours <- readRDS(("data/data_24_hours.RDS"))
+joint_data_2_hours <- readRDS(("data/data_2_hours.RDS"))
+
+```
+
+## Static Figure - 24 hours with dates of interest
+
+```{r}
+#| fig-width: 8
+#| fig-height: 4
+
+filt.joint_data_24_hours <- joint_data_24_hours %>% filter(ts_round >= as.Date("2020-09-02 00:00:00") & 
+           ts_round <= as.Date("2021-01-02 00:00:00"))
+
+ggplot(filt.joint_data_24_hours, aes(x = ts_round, y = avg.air.temp, colour = w_station)) +
+  geom_line() 
+```
+
+# Static Figure - 2 hours with dates of interest
+
+```{r}
+#| fig-width: 8
+#| fig-height: 4
+
+filt.joint_data_2_hours <- joint_data_2_hours %>% filter(ts_round >= as.Date("2020-09-02 00:00:00") & 
+           ts_round <= as.Date("2021-01-02 00:00:00"))
+
+ggplot(filt.joint_data_2_hours, aes(x = ts_round, y = avg.air.temp, colour = w_station)) +
+  geom_line()
+
+```
+
+# Interactive Figure - weather station data - 24 hours
+
+```{r}
+p24 <- ggplot(filt.joint_data_24_hours, aes(x = ts_round, y = avg.air.temp, colour = w_station)) +
+  geom_line()
+
+ggplotly(p24)
+```
+
+# Interactive figure - weather station data - 2 hours
+
+```{r}
+p2 <- ggplot(filt.joint_data_2_hours, aes(x = ts_round, y = avg.air.temp, colour = w_station)) +
+  geom_line()
+
+ggplotly(p2)
+```
+
+```{r}
+#re-reading in different data to transform and plot (in case its gone from the environment)
+avg_temps_2_hours <- readRDS(("data/2.0_averaging_dataset_2_hours.RDS"))
+avg_temps_24_hours <- readRDS(("data/2.0_averaging_dataset_24_hours.RDS"))
+
+#transforming the data to make it a little easier to work with 
+tr.avg_temp_2 <- avg_temps_2_hours %>% 
+  pivot_longer(cols = c(3:5), names_to = "sensor_depth", values_to = "value") %>%
+  filter(ts_round >= as.Date("2020-09-02 00:00:00") & 
+           ts_round <= as.Date("2021-01-02 00:00:00"))
+
+tr.avg_temp_24 <- avg_temps_24_hours %>% 
+  pivot_longer(cols = c(3:5), names_to = "sensor_depth", values_to = "value") %>%
+  filter(ts_round >= as.Date("2020-09-02 00:00:00") & 
+           ts_round <= as.Date("2021-01-02 00:00:00"))
+
+```
+
+
+# Interactive figure - site data - 24 hours - Moose Point 1
+
+```{r}
+d24 <- tr.avg_temp_24 %>% 
+  filter(station == "Moose Point 1") %>% 
+  ggplot(aes(x = ts_round, y = value, colour = sensor_depth)) +
+  geom_line() +
+  labs( 
+    y = "temp (degrees C)")
+
+ggplotly(d24)
+```
+
+# Interactive figure - site data - 2 hours - Moose Point 1
+
+```{r}
+d2 <- tr.avg_temp_2 %>% 
+  filter(station == "Moose Point 1") %>% 
+  ggplot(aes(x = ts_round, y = value, colour = sensor_depth)) +
+  geom_line() +
+  labs( 
+    y = "temp (degrees C)")
+
+ggplotly(d2)
+```
+
+
+# plotting wind speed and temperature against eachother
+
+```{r}
+climate_data_24 <- readRDS(("data/climate_data_24_hours.RDS"))
+
+climate_data_24 %>% 
+  filter(w_station == "BEAVER ISLAND (AUT)") %>%
+  filter(ts_round >= as.Date("2020-09-02 00:00:00") & 
+           ts_round <= as.Date("2021-01-02 00:00:00")) %>% 
+  ggplot(aes(x=ts_round)) +
+  geom_line(aes(y=avg.air.temp, colour = "avg.air.temp")) + 
+  geom_line(aes(y=avg.wind.speed_kmph, colour = "avg.wind.speed_kmph")) +
+  scale_y_continuous(name = "avg temperature(degrees C))", 
+                     sec.axis = sec_axis(~., name = "avg wind speed (kmph)")) +
+  scale_colour_manual(values=c("avg.air.temp"="red", "avg.wind.speed_kmph"="blue"))
+
+
+W_T <- climate_data_24 %>% 
+  filter(w_station == "BEAVER ISLAND (AUT)") %>%
+  filter(ts_round >= as.Date("2020-09-02 00:00:00") & 
+           ts_round <= as.Date("2021-01-02 00:00:00")) %>% 
+  ggplot(aes(x=ts_round)) +
+  geom_line(aes(y=avg.air.temp, colour = "avg.air.temp")) + 
+  geom_line(aes(y=avg.wind.speed_kmph, colour = "avg.wind.speed_kmph")) +
+  scale_y_continuous(name = "avg temperature(degrees C))", 
+                     sec.axis = sec_axis(~., name = "avg wind speed (kmph)")) +
+  scale_colour_manual(values=c("avg.air.temp"="red", "avg.wind.speed_kmph"="blue"))
+
+
+ggplotly(W_T)
+```
+
+
+# correlation between wind speed and water temperatature at a site (2m - Spry Harbour)
+
+```{r}
+
+filt.2 <- filt.joint_data_2_hours %>% 
+  filter(w_station == "BEAVER ISLAND (AUT)" , station == "Spry Harbour")
+
+ggscatter(filt.2, x = "avg.wind.speed_kmph", y = "depth_2", 
+          add = "reg.line", conf.int = TRUE, 
+          cor.coef = TRUE, cor.method = "pearson",
+          xlab = "wind speed (kmph)", ylab = "air temp (degrees C)")
+
+
+c <- ggscatter(filt.2, x = "avg.wind.speed_kmph", y = "depth_2", 
+          add = "reg.line", conf.int = TRUE, 
+          cor.coef = TRUE, cor.method = "pearson",
+          xlab = "wind speed (kmph)", ylab = "depth_2 (temp in degrees C)")
+
+ggplotly(c)
+```
+
+
+# Seasonal Variability
+
+```{r}
+#reading in data
+joint_data_24_hours <- readRDS(("data/data_24_hours.RDS"))
+joint_data_2_hours <- readRDS(("data/data_2_hours.RDS"))
+
+```
+
+## one year of data
+
+```{r}
+
+joint_data_24_hours %>% 
+filter(ts_round >= as.Date("2020-01-01 00:00:00") & 
+           ts_round <= as.Date("2020-12-31 00:00:00")) %>% 
+  ggplot(aes(x = ts_round, y = avg.air.temp, colour = w_station)) +
+  geom_line()
+  
+```
+
+##winter to spring (jan-june)
+
+```{r}
+
+joint_data_24_hours %>% 
+filter(ts_round >= as.Date("2020-01-01 00:00:00") & 
+           ts_round <= as.Date("2020-06-30 00:00:00")) %>% 
+  ggplot(aes(x = ts_round, y = avg.air.temp, colour = w_station)) +
+  geom_line()
+  
+```
+
+
+##summer to fall (july-december)
+
+```{r}
+
+joint_data_24_hours %>% 
+filter(ts_round >= as.Date("2020-06-01 00:00:00") & 
+           ts_round <= as.Date("2020-12-31 00:00:00")) %>% 
+  ggplot(aes(x = ts_round, y = avg.air.temp, colour = w_station)) +
+  geom_line()
+
+
+```
+
+
+#air temperature and water temperature - spry harbour
+
+```{r}
+
+joint_data_24_hours %>% 
+  filter(w_station == "BEAVER ISLAND (AUT)", station == "Spry Harbour") %>%
+  filter(ts_round >= as.Date("2020-01-01 00:00:00") & 
+           ts_round <= as.Date("2021-12-31 00:00:00")) %>% 
+  ggplot(aes(x=ts_round)) +
+  geom_line(aes(y=avg.air.temp, colour = "avg.air.temp")) + 
+  geom_line(aes(y=depth_2, colour = "depth_2")) +
+  geom_line(aes(y=depth_5, colour = "depth_5")) +
+  geom_line(aes(y=depth_10, colour = "depth_10")) +
+  scale_y_continuous(name = "avg temperature(degrees C))", 
+                     sec.axis = sec_axis(~., name = "temp at 2m (degrees C)")) +
+  scale_colour_manual(values=c("avg.air.temp"="red", 
+                               "depth_2"="lightblue", 
+                               "depth_5"="blue",
+                               "depth_10"= "darkblue"))
+
+
+x <- joint_data_24_hours %>% 
+  filter(w_station == "BEAVER ISLAND (AUT)", station == "Spry Harbour") %>%
+  filter(ts_round >= as.Date("2020-01-01 00:00:00") & 
+           ts_round <= as.Date("2021-12-31 00:00:00")) %>% 
+  ggplot(aes(x=ts_round)) +
+  geom_line(aes(y=avg.air.temp, colour = "avg.air.temp")) + 
+  geom_line(aes(y=depth_2, colour = "depth_2")) +
+  geom_line(aes(y=depth_5, colour = "depth_5")) +
+  geom_line(aes(y=depth_10, colour = "depth_10")) +
+  scale_y_continuous(name = "avg temperature(degrees C))", 
+                     sec.axis = sec_axis(~., name = "temp at 2m (degrees C)")) +
+  scale_colour_manual(values=c("avg.air.temp"="red", 
+                               "depth_2"="lightblue", 
+                               "depth_5"="blue",
+                               "depth_10"= "darkblue"))
+
+ggplotly(x)
+
+```
+
+
+
+
+
+# correlation between wind air tempertaure and water temperature at depth "X"
+
+## Spry Harbour station - beaver island weather station
+
+
+# at 2 meters
+
+
+#at 5 meters
+
+
+#at 10 meters
+
+
+
+## Moose Point 1 station - hart island weather station
+
+

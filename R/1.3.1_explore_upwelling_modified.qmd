@@ -1,0 +1,125 @@
+---
+format: 
+  html:
+    toc: true
+    toc-depth: 3
+    embed-resources: true
+params:
+  round_int: round_int
+echo: false
+dpi: 600
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+#| include: false
+
+library(data.table)
+library(dplyr)
+library(DT)
+library(ggplot2)
+library(here)
+library(htmltools)
+library(leaflet)
+library(lubridate)
+library(plotly)
+library(RColorBrewer)
+library(stringr)
+library(tidyr)
+
+source(here("functions/subchunkify.R"))
+source(here("functions/helpers.R"))
+
+theme_set(theme_light())
+
+round_int <- "12 hours"
+#round_int <- params$round_int
+
+# from west to east
+stations <- c("YARMOUTH RCS", "LUNENBURG", "BEAVER ISLAND (AUT)", "HART ISLAND (AUT)" )
+
+dat <- readRDS("data/climate_data_12_hours.RDS") %>% 
+  filter(variable == "bui_m3_s") %>% 
+  mutate(station = ordered(station, levels = stations))
+
+met_locations <- fread(
+  here("data/climate_station_locations.csv"), data.table = FALSE
+) 
+ 
+get_pal <- colorRampPalette(brewer.pal(8, "Set2"))
+pal <- get_pal(length(unique(dat$variable)))
+
+```
+
+# Explore Bakun's Upwelling Index
+
+`r Sys.Date()`
+
+The Bakun Upwelling Index (BUI) is an upwelling index based on Ekman transport, typically expressed in units of $m^3/s$ per 100 m of coastline. Positive values indicate upwelling and negative values indicate downwelling.
+
+$BUI = M * cos(\phi)$
+
+$M = \tau / (\rho_{water} * f)$
+
+$\tau = \rho_{air} * C_D * U^2$
+
+- $\phi$ is the difference between the coastline angle and the direction the wind is blowing towards (both measured clockwise from the North)
+- $U$ is the wind speed in m/s
+- $\rho_{air}$: air density (1.28 kg/m$^3$)
+- $\rho_{water}$: sea water density (1026 kg/m$^3$)
+- $C_D$: the wind drag coefficient (0.0015)
+- $f$: Coriolis parameter, which is dependent on latitude[^1]
+
+[^1]: $f = 2\Omega\sin\phi$, where $\Omega$: Earth's rotation rate (7.292x10$^{-5}s^{-1}$) and $\phi$ is the latitude.
+
+The coastline angle was 60° for BEAVER ISLAND (AUT), HART ISLAND (AUT), and LUNENBURG (following Socrasi et al, 2025). A coastline angle of 330° was used for YARMOUTH RCS.
+
+## Station Locations
+
+```{r}
+#| fig-height: 5
+
+leaflet() %>%
+  addProviderTiles(providers$CartoDB.Positron) %>%
+  addCircleMarkers(
+    data = met_locations,
+    lng = ~longitude,
+    lat = ~latitude, label = ~station,
+    weight = 1, fillOpacity = 0.75, radius = 5
+  ) %>%
+  addScaleBar(
+    position = "bottomleft",
+    options = scaleBarOptions(imperial = FALSE)
+  )
+```
+
+## Time Series
+
+```{r}
+#| results: asis
+#| fig-height: 10
+
+dat <- dat %>% filter(timestamp_utc >= as.Date("2020-05-15 00:00:00") & 
+             timestamp_utc <= as.Date("2020-10-15 00:00:00"))
+
+p <- dat %>% 
+  mutate(upwelling = if_else(value > 0, "upwelling", "downwelling")) %>% 
+  #arrange(station, timestamp_utc) %>% 
+  #filter(station == "YARMOUTH RCS") %>% 
+  ggplot(aes(timestamp_utc, value, fill = upwelling, col = upwelling, group = 1)) +
+  geom_col() +
+  #geom_hline(yintercept = 0, col = "grey50", linewidth = 0.25) +
+  scale_y_continuous("BUI (m^3/s per 100 km)") +
+  scale_fill_manual(
+    values = c("upwelling" = "#414487FF", "downwelling" = "#7AD151FF")
+  ) +
+  scale_color_manual(
+    values = c("upwelling" = "#414487FF", "downwelling" = "#7AD151FF")
+  ) +
+  facet_wrap(~station, ncol = 1) +
+  theme(legend.position = "none", strip.text = element_text(size = 12))
+
+plot(p)
+
+```

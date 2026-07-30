@@ -9,6 +9,15 @@ config.yml
 /data-raw
 /figures
 /scratchpad
+/R/scratchpad
+/html_files
+/plots_and_figures/
+/sort through and maybe delete
+R/seperated datasets - sort and delete/
+R/0.0_&_1.0_templates/
+R/upwelling_&_wind_calc_notes/
+
+
 .positai
 *.html
 *.pdf

@@ -8,9 +8,9 @@ library(sensorstrings)  # plot data
 
 library(tidyverse)
 
-data_1.0 <- readRDS("data/data_1.0.rds")
+data_1.0 <- readRDS("all_data/data/data_1.0.rds")
 
-round_unit <- "24 hours"
+round_unit <- "2 hours"
 
 # averaging by desired amount of time (indicated in round_unit) --------------
 data_avg <- data_1.0 %>% 
@@ -36,6 +36,6 @@ new_data <- new_data %>%
 
 
 # to export data
-file_name <- paste0("2.0_averaging_dataset_",  gsub(" ", "_", round_unit), ".RDS")
+file_name <- paste0("fixed_2.0_averaging_dataset_",  gsub(" ", "_", round_unit), ".RDS")
 
 saveRDS(new_data, file = here("data", file_name))

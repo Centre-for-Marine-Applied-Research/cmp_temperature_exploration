@@ -65,7 +65,8 @@ station_dat %>%
 
 # multiple stations -------------------------------------------------------
 
-stations <- c("Spry Harbour", "Eddy Cove", "0001", "Shad Bay")
+stations <- c("Spry Harbour", "Big Pond Point", "Wedgeport", 
+              "Moose Point 1", "Center Bay", "Birchy Head")
 
 dat <- cmpr_get_station_data(
   conn,
@@ -78,7 +79,7 @@ dat <- cmpr_get_station_data(
 # NOTE: data will NOT be uploaded to GitHub
 
 # save data to analyse later (e.g., calculate daily averages and export)
-saveRDS(dat, here("data/file_name.RDS"))
+saveRDS(dat, here("data/long_temp_data.RDS"))
 
 # if you want to save as a csv file
 fwrite(dat, "data/file_name.csv")

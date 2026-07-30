@@ -3,6 +3,8 @@
 # library(rnaturalearth)
 # library(ggplot2)
 
+# can layer with points and scales, etc 
+
 ns_base_map <- function(
     x_min = -69, x_max = -57, y_min = 43.5, y_max = 47,
     linewidth = 0.5

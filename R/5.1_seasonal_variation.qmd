@@ -1,0 +1,58 @@
+---
+title: "Seasonal Variations - 2020 in review"
+author: "Ella Headrick"
+date: "`r Sys.Date()`"
+format: 
+  html:
+    toc: true
+    toc-depth: 3
+    embed-resources: true
+echo: false
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+#| include: false
+
+library(DT)
+library(ggplot2)
+library(readr)
+library(data.table)     # export csv file
+library(dplyr)          # wrangling data
+library(here)           # file paths
+library(lubridate)      # dates & times
+library(plotly)         # interactive figures
+library(sensorstrings)  # plot data
+
+library(tidyverse)
+library(ggpubr)
+
+library(patchwork)
+library(hrbrthemes)
+library(scales)
+
+#loading in data sets - CMAR water quality data and ECC climate data (avg at 2 hours and 24 hours)
+climate_data_2_hours <- readRDS(("data/climate_data_2_hours.RDS"))
+avg_temps_2_hours <- readRDS(("data/2.0_averaging_dataset_2_hours.RDS"))
+
+climate_data_24_hours <- readRDS(("data/climate_data_24_hours.RDS"))
+avg_temps_24_hours <- readRDS(("data/2.0_averaging_dataset_24_hours.RDS"))
+
+#joining
+joint_data_2_hours <- full_join(climate_data_2_hours, avg_temps_2_hours)
+joint_data_24_hours <-full_join(climate_data_24_hours, avg_temps_24_hours)
+
+#saving for later
+saveRDS(joint_data_24_hours, file = "data/joint_data_24_hours.rds")
+saveRDS(joint_data_2_hours, file = "data/joint_data_2_hours.rds")
+```
+
+# Looking at the data together - Hurricane Teddy
+
+```{r}
+#reading in data
+joint_data_24_hours <- readRDS(("data/data_24_hours.RDS"))
+joint_data_2_hours <- readRDS(("data/data_2_hours.RDS"))
+
+```

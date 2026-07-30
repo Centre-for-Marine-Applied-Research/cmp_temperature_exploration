@@ -1,0 +1,252 @@
+library(oce)
+library(tidyr)
+library(ggplot2)
+library(sensorstrings)
+library(lubridate)
+library(repr)
+library(plotly)
+library(dplyr)
+library(padr)
+library(imputeTS)
+
+library(paletteer)
+library(geomtextpath)
+
+#1 Plotting air temp and water temp ----------------------------------------
+data <- readRDS(("all_data/data/data_24_hours.RDS")) %>% 
+  mutate(station=ordered(station, levels=c("Big Pond Point", "Wedgeport", 
+                                           "Birchy Head", "Spry Harbour", 
+                                           "Center Bay", "Moose Point 1"))) %>% 
+  mutate(
+    station = case_when(
+      station == "Moose Point 1" ~ "1 - Moose Point 1", 
+      station == "Center Bay" ~ "2 - Center Bay",
+      station == "Spry Harbour" ~ "3 - Spry Harbour",
+      station == "Birchy Head" ~ "4 - Birchy Head",
+      station == "Wedgeport" ~ "5 - Wedgeport",
+      station == "Big Pond Point" ~ "6 - Big Pond Point")) %>% 
+  select(station, ts_round, depth_2, depth_5, depth_10)
+
+
+data_temps <- data %>% 
+  dplyr::filter(ts_round >= as.Date("2022-05-15 00:00:00") & 
+           ts_round <= as.Date("2022-10-15 00:00:00")) %>% 
+  pivot_longer(
+    cols = c(depth_2, depth_5, depth_10),
+    names_to = "variable",
+    values_to = "value") 
+
+# plotting the data
+p<- data_temps %>% 
+  ggplot(aes(x=ts_round, y=value, colour = variable)) +
+  geom_line(linewidth =0.8) +
+  scale_color_paletteer_d("vangogh::Chaise") +
+  facet_wrap(~station, ncol = 2, shrink = FALSE) +
+  theme(legend.position = "bottom",
+        axis.text.x = element_text(size = 12),
+        axis.text.y = element_text(size = 12)) 
+plot(p)
+
+
+#2 Upwelling index ---------------------------------------------------------
+
+stations <- c("YARMOUTH RCS", "LUNENBURG", 
+              "BEAVER ISLAND (AUT)", "HART ISLAND (AUT)" )
+
+dat <- readRDS("data/climate_data_12_hours.RDS") %>% 
+  dplyr::filter(variable == "bui_m3_s") %>% 
+  mutate(station = ordered(station, levels = stations))
+
+dat <- dat %>% dplyr::filter(timestamp_utc >= as.Date("2020-05-15 00:00:00") & 
+                        timestamp_utc <= as.Date("2020-10-15 00:00:00")) %>% 
+  mutate(station = case_when(
+    station == "YARMOUTH RCS" ~ "4 - Yarmouth weather",
+    station == "LUNENBURG" ~ "3 - Lunenburg weather",
+    station == "BEAVER ISLAND (AUT)" ~ "2 - Halifax weather",
+    station == "HART ISLAND (AUT)" ~ "1 - Guysborough weather"
+  ))
+
+p <- dat %>% 
+  mutate(upwelling = if_else(value > 0, "upwelling", "downwelling")) %>% 
+  #arrange(station, timestamp_utc) %>% 
+  #filter(station == "YARMOUTH RCS") %>% 
+  ggplot(aes(timestamp_utc, value, fill = upwelling, col = upwelling, group = 1)) +
+  geom_col() +
+  #geom_hline(yintercept = 0, col = "grey50", linewidth = 0.25) +
+  scale_y_continuous("BUI (m^3/s per 100 km)") +
+  scale_fill_manual(
+    values = c("upwelling" = "#414487FF", "downwelling" = "#7AD151FF")
+  ) +
+  scale_color_manual(
+    values = c("upwelling" = "#414487FF", "downwelling" = "#7AD151FF")
+  ) +
+  facet_wrap(~station, ncol = 1) +
+  theme(legend.position = "none", strip.text = element_text(size = 12))
+
+plot(p)
+
+
+#3 by depth climatology and SD mapped together  --------------------------
+# need to re-work since last render
+
+climatology <- readRDS("data/anomalies_df.rds") %>% 
+  select(station, ts_round, month_day, 
+         climatology_mean_d2, climatology_sd_d2,
+         climatology_mean_d5, climatology_sd_d5,
+         climatology_mean_d10, climatology_sd_d10,
+         ) %>% 
+  mutate(
+    station = case_when(
+      station == "Moose Point 1" ~ "1 - Moose Point 1", 
+      station == "Center Bay" ~ "2 - Center Bay",
+      station == "Spry Harbour" ~ "3 - Spry Harbour",
+      station == "Birchy Head" ~ "4 - Birchy Head",
+      station == "Wedgeport" ~ "5 - Wedgeport",
+      station == "Big Pond Point" ~ "6 - Big Pond Point"))
+  
+
+climatology <- unique(climatology) %>% na.omit()
+
+p<- climatology %>% 
+  ggplot(aes(month_day)) +
+  
+  geom_rect(aes(xmin = "01-01", xmax = "04-01", ymin = -Inf, ymax = Inf), 
+            fill = "lightblue", alpha = 0.1) +
+  geom_rect(aes(xmin = "04-01", xmax = "07-01", ymin = -Inf, ymax = Inf), 
+            fill = "lightgreen", alpha = 0.05) +
+  geom_rect(aes(xmin = "07-01", xmax = "10-01", ymin = -Inf, ymax = Inf), 
+            fill = "pink", alpha = 0.05) +
+  geom_rect(aes(xmin = "10-01", xmax = "12-31", ymin = -Inf, ymax = Inf), 
+            fill = "lightyellow", alpha = 0.05) +
+  
+  
+  geom_line(aes(group=1, y=climatology_mean_d2), colour= "black") +
+  geom_ribbon(aes(group=1,  
+                  ymin = climatology_mean_d2 - climatology_sd_d2 ,
+                  ymax = climatology_mean_d2 + climatology_sd_d2), 
+              fill= "blue", alpha = 0.3) +
+  
+  geom_vline(xintercept =  "01-01", color = "blue", linetype = "dashed", size = 0.3) +
+  geom_vline(xintercept =  "02-01", color = "blue", linetype = "dashed", size = 0.3) +
+  geom_vline(xintercept =  "03-01", color = "blue", linetype = "dashed", size = 0.3) +
+  geom_vline(xintercept =  "04-01", color = "green", linetype = "dashed", size = 0.3) +
+  geom_vline(xintercept =  "05-01", color = "green", linetype = "dashed", size = 0.3) +
+  geom_vline(xintercept =  "06-01", color = "green", linetype = "dashed", size = 0.3) +
+  geom_vline(xintercept =  "07-01", color = "red", linetype = "dashed", size = 0.3) +
+  geom_vline(xintercept =  "08-01", color = "red", linetype = "dashed", size = 0.3) +
+  geom_vline(xintercept =  "09-01", color = "red", linetype = "dashed", size = 0.3) +
+  geom_vline(xintercept =  "10-01", color = "orange", linetype = "dashed", size = 0.3) +
+  geom_vline(xintercept =  "11-01", color = "orange", linetype = "dashed", size = 0.3) +
+  geom_vline(xintercept =  "12-01", color = "orange", linetype = "dashed", size = 0.3) +
+  facet_wrap(~station, ncol = 3)
+
+ggplotly(p)
+
+
+
+# 4 historgam of anomalies ------------------------------------------------
+# need to rework since last render
+data <- readRDS("data/scatter_data.rds") %>% 
+  pivot_longer(
+    cols = c(Anomaly_d2, Anomaly_d5, Anomaly_d10),
+    names_to = "anomaly",
+    values_to = "anomaly_value") %>% 
+  pivot_longer(
+    cols = c(climatology_mean_d2, climatology_sd_d2,
+             climatology_mean_d5, climatology_sd_d5,
+             climatology_mean_d10, climatology_sd_d10),
+    names_to = "climatology", 
+    values_to = "climate_value") %>% 
+  mutate(
+    station = case_when(
+      station == "Moose Point 1" ~ "1 - Moose Point 1", 
+      station == "Center Bay" ~ "2 - Center Bay",
+      station == "Spry Harbour" ~ "3 - Spry Harbour",
+      station == "Birchy Head" ~ "4 - Birchy Head",
+      station == "Wedgeport" ~ "5 - Wedgeport",
+      station == "Big Pond Point" ~ "6 - Big Pond Point"))
+
+# depth_2
+
+data %>% filter(anomaly == "Anomaly_d2") %>% 
+
+ggplot(aes(x=anomaly_value, fill = anomaly)) +
+  geom_histogram(binwidth = 0.5, position = "dodge") +
+  scale_colour_viridis_c() +
+  facet_wrap(~station, ncol = 2, scales = "free") +
+  scale_x_continuous(breaks = seq(-10, 10, by = 0.5)) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+
+#depth_5
+
+data %>% filter(anomaly == "Anomaly_d5") %>% 
+  
+  ggplot(aes(x=anomaly_value, fill = anomaly)) +
+  geom_histogram(binwidth = 0.5, position = "dodge") +
+  scale_colour_viridis_c() +
+  facet_wrap(~station, ncol = 2, scales = "free") +
+  scale_x_continuous(breaks = seq(-10, 10, by = 0.5)) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+#depth_10
+
+data %>% filter(anomaly == "Anomaly_d10") %>% 
+  
+  ggplot(aes(x=anomaly_value, fill = anomaly)) +
+  geom_histogram(binwidth = 0.5, position = "dodge") +
+  scale_colour_viridis_c() +
+  facet_wrap(~station, ncol = 2, scales = "free") +
+  scale_x_continuous(breaks = seq(-10, 10, by = 0.5)) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+
+
+# 5 stratification(interp) vs anomalies(interp-climate) -------------------
+
+# need to re-work since last render 
+data <- readRDS("data/scatter_data.rds") %>% 
+  mutate(
+    station = case_when(
+      station == "Moose Point 1" ~ "1 - Moose Point 1", 
+      station == "Center Bay" ~  "2 - Center Bay",
+      station == "Spry Harbour" ~ "3 - Spry Harbour",
+      station == "Birchy Head" ~ "4 - Birchy Head",
+      station == "Wedgeport" ~ "5 - Wedgeport",
+      station == "Big Pond Point" ~ "6 - Big Pond Point")) %>% 
+  mutate(Index.2_5 = climatology_mean_d2 - climatology_mean_d5, 
+         Index.2_10 = climatology_mean_d2 - climatology_mean_d10,
+         Index.5_10 = climatology_mean_d5 - climatology_mean_d10)
+
+# plotting anomalies vs statification index
+data %>% ggplot(aes(x=Index.2_10, y=Anomaly_d10)) +
+  geom_point() +
+  facet_wrap(~station) +
+  labs(title = "stratification vs anomalies", subtitle= "x and y are both in degrees C")
+
+data %>% ggplot(aes(x=Index.2_5, y=Anomaly_d5)) +
+  geom_point() +
+  facet_wrap(~station) +
+  labs(title = "stratification vs anomalies", subtitle= "x and y are both in degrees C")
+
+data %>% ggplot(aes(x=Index.5_10, y=Anomaly_d10)) +
+  geom_point() +
+  facet_wrap(~station) +
+  labs(title = "stratification vs anomalies", subtitle= "x and y are both in degrees C")
+
+# re-organizing the data 
+data_long <- data %>% 
+  pivot_longer(
+    cols = c(Anomaly_d2, Anomaly_d5, Anomaly_d10),
+    names_to = "anomaly",
+    values_to = "anomaly_value") %>% 
+  pivot_longer(
+    cols = c(climatology_mean_d2, climatology_sd_d2,
+             climatology_mean_d5, climatology_sd_d5,
+             climatology_mean_d10, climatology_sd_d10),
+    names_to = "climatology", 
+    values_to = "climate_value")
+
+
+
+

@@ -6,6 +6,20 @@
 # downloaded using cygwin
 # technical details here: https://climate.weather.gc.ca/doc/Technical_Documentation.pdf
 
+#https://climate.weather.gc.ca/glossary_e.html#windDir
+# Wind Direction (10's deg/tens of degrees) The direction (true or geographic,
+# not magnetic) from which the wind blows. It represents the average direction
+# during the two minute period ending at the time of observation. Expressed in
+# tens of degrees (10's deg), 9 means 90 degrees true or an east wind, and 36
+# means 360 degrees true or a wind blowing from the geographic North Pole. A
+# value of zero (0) denotes a calm wind.
+#
+# Wind Speed (km/h) The speed of motion of air in kilometres per hour (km/h)
+# usually observed at 10 metres above the ground. It represents the average
+# speed during the one-, two- or ten-minute period ending at the time of
+# observation. In observing, it is measured in nautical miles per hour or
+# kilometres per hour.
+
 # import data
 # format column names (variable_units) 
 # convert wind speed and direction to proper units
@@ -150,10 +164,10 @@ fwrite(
 
 
 
-library(ggplot2)
-ggplot(wl_dat_round, aes(round_timestamp_utc, water_level_m)) +
-  geom_line() + 
-  facet_wrap(~station, ncol = 1)
+# library(ggplot2)
+# ggplot(wl_dat_round, aes(round_timestamp_utc, water_level_m)) +
+#   geom_line() + 
+#   facet_wrap(~station, ncol = 1)
 
  
 # x <- fread(
@@ -176,7 +190,7 @@ ggplot(wl_dat_round, aes(round_timestamp_utc, water_level_m)) +
 #   )
 
 
-ggplot(x2, aes(timestamp_utc, water_level_m)) +
-  geom_line()
+# ggplot(x2, aes(timestamp_utc, water_level_m)) +
+#   geom_line()
 
 

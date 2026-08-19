@@ -42,9 +42,8 @@ ggplot(dat1, aes(timestamp, value)) +
   geom_line() 
 
 dat_imp1 <- dat1 |> 
-  ts()
-
-imp1 <- na_seadec(dat_imp1, algorithm = "interpolation", find_frequency = TRUE)
+  ts() |> 
+  na_seadec(algorithm = "interpolation", find_frequency = TRUE)
 
 dat1$value_imp <- imp1[, 2]
 
@@ -52,6 +51,35 @@ dat1 <- dat1 |>
   mutate(imp = if_else(is.na(value), TRUE, FALSE))
 
 ggplot(dat1, aes(timestamp, value_imp, col = imp)) +
+  geom_point() 
+
+
+# single time series - not in chronological order ------------------------------------------------------
+
+dat1.1 <- data.frame(
+  timestamp = seq(as_date("2025-01-01"), as_date("2026-12-31"))
+) |> 
+  mutate(value = A * sin((2 * pi * as.numeric(timestamp)) / per  + phi)) 
+
+dat1.1[20:45, "value"] <- NA
+dat1.1[471:571, "value"] <- NA
+
+dat1.1 <- dat1[sample(1:nrow(dat1.1)), ]
+
+# looks the same as the above because ggplot knows timestamp is a posixct object
+ggplot(dat1.1, aes(timestamp, value)) +
+  geom_line() 
+
+dat_imp1.1 <- dat1.1 |> 
+  ts() |> 
+  na_seadec(algorithm = "interpolation", find_frequency = TRUE)
+
+dat1.1$value_imp <- imp1[, 2]
+
+dat1.1 <- dat1.1 |> 
+  mutate(imp = if_else(is.na(value), TRUE, FALSE))
+
+ggplot(dat1.1, aes(timestamp, value_imp, col = imp)) +
   geom_point() 
 
 
@@ -64,34 +92,29 @@ dat2 <- data.frame(
 ) |> 
   mutate(variable_2 = A * sin((2 * pi * as.numeric(timestamp)) / per  + phi)) |> 
   pivot_longer(cols = contains("variable"), values_to = "value", names_to = "variable") |> 
-  arrange(variable)
-
-dat2[750:775, "value"] <- NA
-dat2[1200:1300, "value"] <- NA
+  arrange(timestamp)
+ 
+dat2[75:125, "value"] <- NA
+dat2[1000:1200, "value"] <- NA
 
 ggplot(dat2, aes(timestamp, value)) +
   geom_line() +
   facet_wrap(~variable, ncol = 1)
 
 dat_imp2 <- dat2 |> 
-  arrange(timestamp) |>  
-  group_by(variable) |> 
   ts() |> 
   # doesn't give an error or warning!
   # na_secdec does not respect group_by
   na_seadec(algorithm = "interpolation", find_frequency = TRUE) 
 
-dat2 <- dat2 |> arrange(timestamp)
 dat2$value_imp <- dat_imp2[, 3]
 
 dat2 <- dat2 |> 
-  ungroup() |> 
   mutate(imp = if_else(is.na(value), TRUE, FALSE)) 
 
 ggplot(dat2, aes(timestamp, value_imp, col = imp)) +
   geom_point() +
   facet_wrap(~variable, ncol = 1)
-
 
 # maps over 2 time series---------------------------------------------------------------------
 
@@ -103,7 +126,6 @@ dat3 <-  data.frame(
   ) |> 
   pivot_longer(cols = contains("variable"), values_to = "value", names_to = "variable") |> 
   arrange(variable, timestamp)
-
 
 dat3[100:175, "value"] <- NA
 dat3[300:335, "value"] <- NA
@@ -169,3 +191,5 @@ dat4 <- dat4 |>
 ggplot(dat4, aes(timestamp, value_imp, col = imp)) +
   geom_point() +
   facet_wrap(~variable, ncol = 1)
+
+

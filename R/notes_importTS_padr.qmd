@@ -1,0 +1,310 @@
+---
+title: "Interpolation"
+date: "`r Sys.Date()`"
+author: "Danielle Dempsey"
+format: 
+  html:
+    toc: true
+    toc-depth: 3
+    embed-resources: true
+echo: true
+fig-height: 4
+editor_options: 
+  chunk_output_type: console
+---
+
+
+```{r}
+#| include: false
+
+library(dplyr)
+library(ggplot2)
+library(imputeTS)
+library(lubridate)
+library(purrr)
+library(tidyr)
+
+theme_set(theme_light())
+
+A <- 10
+per <- 365
+phi <- 0
+C <- 15
+```
+
+
+Review how `imputeTS::na_seadec()` handles a full time series of missing values.
+
+# Summary 
+
+  - `imputeTS::na_seadec()` will give a `Warning` when there are fewer than 3 non-NA data points in the time series.
+  - BUT `imputeTS::na_seadec()` DOES NOT RESPECT `dplyr::group_by()` groups. It will silently use data from one group to fill in the other group.
+  - To properly interpolate for multiple groups at a time, break the dataframe into lists (instead of groups) and use `purrr::map()` to apply `na_seadec()` to each list.
+  
+  
+
+# One Group
+
+## All `NA`
+
+Results in a `Warning`.
+
+```{r}
+
+dat <- data.frame(
+  timestamp = seq(as_date("2025-01-01"), as_date("2026-12-31")),
+  value = NA
+) 
+
+dat_imp <- ts(dat)
+
+imp <- na_seadec(dat_imp, algorithm = "interpolation", find_frequency = TRUE)
+
+```
+
+## Data Values
+
+```{r}
+dat1 <- data.frame(
+  timestamp = seq(as_date("2025-01-01"), as_date("2026-12-31"))
+) |> 
+  mutate(value = A * sin((2 * pi * as.numeric(timestamp)) / per  + phi)) 
+
+dat1[20:45, "value"] <- NA
+dat1[471:571, "value"] <- NA
+
+ggplot(dat1, aes(timestamp, value)) +
+  geom_line() 
+
+dat_imp1 <- dat1 |> 
+  ts() |> 
+  na_seadec(algorithm = "interpolation", find_frequency = TRUE)
+
+dat1$value_imp <- dat_imp1[, 2]
+
+dat1 <- dat1 |> 
+  mutate(imp = if_else(is.na(value), TRUE, FALSE))
+
+ggplot(dat1, aes(timestamp, value_imp, col = imp)) +
+  geom_point() 
+
+```
+
+## Bonus Check: Values not in Chronological Order
+
+  - `ggplot()` figure is correct because `ggplot2` recognizes `timestamp` is a `Date` object and re-orders the values accordingly.
+  - HOWEVER, `ts()` converts the data frame into a timeseries object based on the row order.
+  - So if the rows are not in chronological order, there may not be a seasonal trend to decompose.
+  - The interpolation will not be correct.
+
+```{r}
+dat1_1 <- data.frame(
+  timestamp = seq(as_date("2025-01-01"), as_date("2026-12-31"))
+) |> 
+  mutate(value = A * sin((2 * pi * as.numeric(timestamp)) / per  + phi)) 
+
+dat1_1[20:45, "value"] <- NA
+dat1_1[471:571, "value"] <- NA
+
+dat1_1 <- dat1[sample(1:nrow(dat1_1)), ]
+
+# looks the same as the above because ggplot knows timestamp is a Date object
+ggplot(dat1_1, aes(timestamp, value)) +
+  geom_line() 
+
+dat_imp1_1 <- dat1_1 |> 
+  ts() |> 
+  na_seadec(algorithm = "interpolation", find_frequency = TRUE)
+
+dat1_1$value_imp <- dat_imp1_1[, 2]
+
+dat1_1 <- dat1_1 |> 
+  mutate(imp = if_else(is.na(value), TRUE, FALSE))
+
+ggplot(dat1_1, aes(timestamp, value_imp, col = imp)) +
+  geom_point() 
+```
+
+# Two Groups
+
+## All `NA` for 1 Group 
+
+### Using `dplyr::group_by()`
+
+This silently gives the wrong answer!
+
+`imputeTS::na_secdec()` does not respect `dplyr::group_by()`.
+
+```{r}
+
+dat2 <- data.frame(
+  timestamp = seq(as_date("2025-01-01"), as_date("2026-12-31")),
+  variable_1 = NA
+) |> 
+  mutate(variable_2 = A * sin((2 * pi * as.numeric(timestamp)) / per  + phi)) |> 
+  pivot_longer(cols = contains("variable"), values_to = "value", names_to = "variable") |> 
+  arrange(timestamp)
+ 
+dat2[75:125, "value"] <- NA
+dat2[1000:1200, "value"] <- NA
+
+ggplot(dat2, aes(timestamp, value)) +
+  geom_line() +
+  facet_wrap(~variable, ncol = 1)
+
+dat_imp2 <- dat2 |> 
+  ts() |> 
+  # doesn't give an error or warning!
+  # na_secdec does not respect group_by
+  na_seadec(algorithm = "interpolation", find_frequency = TRUE) 
+
+dat2$value_imp <- dat_imp2[, 3]
+
+dat2 <- dat2 |> 
+  mutate(imp = if_else(is.na(value), TRUE, FALSE)) 
+
+ggplot(dat2, aes(timestamp, value_imp, col = imp)) +
+  geom_point() +
+  facet_wrap(~variable, ncol = 1)
+```
+
+### Using `purrr::map()`
+
+Gives a `Warning` message for groups with too many NAs.
+
+```{r}
+dat3 <- data.frame(
+  timestamp = seq(as_date("2025-01-01"), as_date("2026-12-31")),
+  variable_1 = NA
+) |> 
+  mutate(variable_2 = A * sin((2 * pi * as.numeric(timestamp)) / per  + phi)) |> 
+  pivot_longer(cols = contains("variable"), values_to = "value", names_to = "variable") |> 
+  arrange(variable)
+
+
+dat3[750:775, "value"] <- NA
+dat3[1200:1300, "value"] <- NA
+
+ggplot(dat3, aes(timestamp, value)) +
+  geom_line() +
+  facet_wrap(~variable, ncol = 1)
+
+# gives a warning message!
+dat3_imp <- dat3 |> 
+  group_split(variable) |> # splits into lists based on a variable
+  map(
+    .f = \(x) ts(x) |> 
+      na_seadec(algorithm = "interpolation", find_frequency = TRUE) |> 
+      data.frame()
+  ) |> 
+  list_rbind() 
+
+dat3$value_imp <- dat3_imp$value 
+
+dat3 <- dat3 |> 
+  mutate(imp = if_else(is.na(value), TRUE, FALSE))
+
+ggplot(dat3, aes(timestamp, value_imp, col = imp)) +
+  geom_point() +
+  facet_wrap(~variable, ncol = 1)
+
+```
+
+
+## Data Values: `purrr::map()`
+
+```{r}
+
+dat4 <-  data.frame(
+  timestamp = seq(as_date("2025-01-01"), as_date("2026-12-31"))) |> 
+  mutate(
+    variable_1 = A * sin((2 * pi * as.numeric(timestamp)) / per  + phi),
+    variable_2 = 5 * sin((2 * pi * as.numeric(timestamp)) / per  + 25)
+  ) |> 
+  pivot_longer(cols = contains("variable"), values_to = "value", names_to = "variable") |> 
+  arrange(variable, timestamp)
+
+dat4[100:175, "value"] <- NA
+dat4[300:335, "value"] <- NA
+
+dat4[750:775, "value"] <- NA
+dat4[1200:1300, "value"] <- NA
+
+ggplot(dat4, aes(timestamp, value)) +
+  geom_line() +
+  facet_wrap(~variable, ncol = 1)
+
+dat4_imp <- dat4 |> 
+  group_split(variable) |> # splits into lists based on a variable
+  purrr::map(
+    .f = \(x) ts(x) |> 
+      na_seadec(algorithm = "interpolation", find_frequency = TRUE) |> 
+      data.frame()
+  ) |> 
+  list_rbind() 
+
+dat4$value_imp <- dat4_imp$value 
+
+dat4 <- dat4 |> 
+  mutate(imp = if_else(is.na(value), TRUE, FALSE))
+
+ggplot(dat4, aes(timestamp, value_imp, col = imp)) +
+  geom_point() +
+  facet_wrap(~variable, ncol = 1)
+
+```
+
+# Does `padr::pad()` change anything?
+
+
+```{r}
+
+dat5 <- dat4 |> 
+  select(-c(value_imp, imp)) |> 
+  filter(!is.na(value))
+
+sum(is.na(dat5$value))
+nrow(dat5)
+
+ggplot(dat5, aes(timestamp, value)) +
+  geom_point(size = 0.5) +
+  facet_wrap(~variable, ncol = 1)
+
+# add NAs back in with padr
+dat5 <- dat5 |> 
+  group_by(variable) |> 
+  padr::pad() |> 
+  ungroup()
+
+sum(is.na(dat5$value))
+nrow(dat5)
+
+dat5_imp <- dat5 |> 
+  group_split(variable) |> # splits into lists based on a variable
+  purrr::map(
+    .f = \(x) ts(x) |> 
+      na_seadec(algorithm = "interpolation", find_frequency = TRUE) |> 
+      data.frame()
+  ) |> 
+  list_rbind() 
+
+dat5$value_imp <- dat5_imp$value 
+
+dat5 <- dat5 |> 
+  mutate(imp = if_else(is.na(value), TRUE, FALSE))
+
+ggplot(dat5, aes(timestamp, value_imp, col = imp)) +
+  geom_point() +
+  facet_wrap(~variable, ncol = 1)
+
+```
+
+
+
+
+
+
+
+
+
+
